@@ -45,7 +45,7 @@ func main() {
 		MinHeight:         420,
 		StartHidden:       background,
 		HideWindowOnClose: true, // closing the window keeps HukukFix in the tray
-		BackgroundColour:  &options.RGBA{R: 21, G: 22, B: 25, A: 255},
+		BackgroundColour:  windowBackground(eng.Settings().Theme),
 		AssetServer:       &assetserver.Options{Assets: assets},
 		OnStartup:         app.startup,
 		OnShutdown:        app.shutdown,

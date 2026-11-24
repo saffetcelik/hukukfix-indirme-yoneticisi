@@ -14,7 +14,7 @@ const (
 	AppName   = "HukukFix İndirme Yöneticisi"
 	AppNameEN = "HukukFix Download Manager"
 
-	Version = "1.1.0"
+	Version = "1.1.1"
 
 	// NativeHostName is the name browsers use to find the native messaging host.
 	NativeHostName = "com.hukukfix.downloadmanager"

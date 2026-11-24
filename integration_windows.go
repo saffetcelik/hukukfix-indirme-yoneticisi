@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/wailsapp/wails/v2/pkg/options"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
@@ -212,4 +213,26 @@ func displayName() string {
 		return shared.AppName
 	}
 	return shared.AppNameEN
+}
+
+// windowBackground is the colour the window shows before the page has drawn: the theme's own background, so a light
+// theme does not flash dark at start-up. "system" follows Windows' app mode (AppsUseLightTheme).
+func windowBackground(theme string) *options.RGBA {
+	dark := &options.RGBA{R: 21, G: 22, B: 25, A: 255}
+	light := &options.RGBA{R: 250, G: 250, B: 251, A: 255}
+	switch theme {
+	case "dark":
+		return dark
+	case "light":
+		return light
+	}
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, registry.QUERY_VALUE)
+	if err != nil {
+		return light
+	}
+	defer k.Close()
+	if v, _, err := k.GetIntegerValue("AppsUseLightTheme"); err == nil && v == 0 {
+		return dark
+	}
+	return light
 }

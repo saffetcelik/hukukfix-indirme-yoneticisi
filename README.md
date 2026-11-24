@@ -59,7 +59,21 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Test -Zip
 | `frontend/dist` | Arayüz (derleme adımı olmayan düz HTML/CSS/JS) |
 | `extension` | Tarayıcı uzantısı (Manifest V3) |
 | `main.go`, `app.go`, `bridge.go`, `tray.go` | Pencere, yerel köprü API'si, tepsi simgesi |
-| `tools` | İkon üretici, uzantı anahtarı üretici, arayüz önizleme sunucusu, indirme ve uzantı deneme araçları |
+| `tools` | İkon üretici, uzantı anahtarı üretici, arayüz önizleme sunucusu, indirme ve uzantı deneme araçları, uçtan uca test (`tools/e2e`) |
+
+### Testler
+
+```powershell
+go test ./internal/...                                              # indirme motoru
+powershell -ExecutionPolicy Bypass -File tools\e2e\calistir.ps1     # uçtan uca, gerçek pencere
+```
+
+Uçtan uca test, programın test sürümünü (`-tags e2e`, yalnız testte derlenen `e2e_hook.go`) geçici bir veri klasörüyle açar ve arayüzdeki düğmelere gerçekten basar: ekleme, duraklat/sürdür, tümünü duraklat/sürdür, iptal, listeden kaldır, dosyayı sil, başarısız indirme ve yeniden deneme, sekmeler ve arama, tamamlananları temizle (liste tamamen boşalınca dahil), kapatıp açınca kaldığı yerden sürdürme, tarayıcı köprüsü (uzantı → `HukukFixDM-host.exe` → program), sürükle-bırak, kısayollar, tema ve dil. İndirmeler yalnız testin 127.0.0.1'de açtığı sunucudan yapılır ve her dosya bayt bayt doğrulanır. Program açılışta tarayıcı köprüsünü kayıt defterine yazdığı için betik ilgili anahtarları önce yedekler, sonra geri yükler.
+
+## Sürüm notları
+
+- **1.1.1** — Hepsi tamamlanmışken "Tamamlananları temizle"ye basınca ya da listedeki son indirme kaldırılınca pencere eski satırları göstermeye devam ediyordu (boş liste pencereye hiç gönderilmiyordu). Düzeltildi. Açık temada pencere açılırken koyu renkte yanıp sönmüyor. Uçtan uca test eklendi (68 adım).
+- **1.1.0** — İlk açık kaynak sürüm.
 
 ## Güvenlik tasarımı
 

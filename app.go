@@ -37,6 +37,9 @@ type App struct {
 	notify  bool
 }
 
+// e2eHook is set by e2e_hook.go, which is compiled only with -tags e2e.
+var e2eHook func(*App)
+
 func newApp(eng *engine.Engine, dataDir string, background bool, urls []string) *App {
 	return &App{eng: eng, dataDir: dataDir, background: background, initialURLs: urls, emit: make(chan struct{}, 1)}
 }
@@ -65,6 +68,9 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	go a.emitLoop()
+	if e2eHook != nil {
+		e2eHook(a) // only in builds made with -tags e2e (tools/e2e)
+	}
 	go a.runTray()
 	for _, u := range a.initialURLs {
 		_, _ = a.eng.Add(engine.AddRequest{URL: u, Source: "manual"})
@@ -128,10 +134,12 @@ func (a *App) lang() string {
 // ---- pushing state to the window ----
 
 // StatePayload is what the "state" event carries. Live holds every unfinished
-// download; All is only present when the list itself changed (something was
+// download; All is only set when the list itself changed (something was
 // added, removed or finished), so a long history costs nothing per tick.
+// All is null when unchanged and [] when the list became empty: it must not be
+// "omitempty", or clearing the last downloads would never reach the window.
 type StatePayload struct {
-	All    []engine.Snapshot `json:"all,omitempty"`
+	All    []engine.Snapshot `json:"all"`
 	Live   []engine.Snapshot `json:"live"`
 	Active int               `json:"active"`
 	Speed  float64           `json:"speed"`
