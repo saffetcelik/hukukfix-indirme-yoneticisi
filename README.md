@@ -47,7 +47,7 @@ Bağlantı kurulunca HukukFix'in sağ alt köşesinde **Tarayıcı bağlı** yaz
 
 ### Otomatik güncelleme
 
-HukukFix açıldıktan kısa süre sonra ve 6 saatte bir GitHub'daki son sürüme bakar. Yeni sürüm varsa arka planda indirir; pencerenin üstünde **Yeni sürüm hazır** şeridi ve bir Windows bildirimi çıkar. **Yeniden başlat**'a basınca ya da programı bir sonraki açışınızda yeni sürüm kurulur; ayarlar ve indirme listesi korunur. **Ayarlar → Genel → Otomatik güncelle** ile kapatılabilir; Ayarlar'ın en altındaki **Güncellemeleri denetle** her zaman çalışır.
+HukukFix açıldıktan 10 saniye sonra ve açık kaldıkça 6 saatte bir GitHub'daki son sürüme bakar; internete ulaşamazsa 10 dakika sonra yeniden dener. Yeni sürüm varsa arka planda indirir; pencerenin üstünde **Yeni sürüm hazır** şeridi ve bir Windows bildirimi çıkar. **Yeniden başlat**'a basınca ya da programı bir sonraki açışınızda yeni sürüm kurulur; ayarlar ve indirme listesi korunur. **Ayarlar → Genel → Otomatik güncelle** ile kapatılabilir; Ayarlar'ın en altındaki **Güncellemeleri denetle** her zaman çalışır.
 
 Her sürümün yanında bir imza dosyası (`HukukFixDM.exe.sig`) bulunur: sürüm numarasını, dosya boyutunu ve SHA-256 özetini bir Ed25519 anahtarıyla imzalar. Anahtarın açık yarısı programın içindedir; gizli yarısı ne bu depoda ne GitHub'dadır. Program indirdiği dosyayı imza, sürüm numarası ve özet birebir tutmadıkça kurmaz. Bu yüzden GitHub hesabı ele geçirilse, dosya yolda değiştirilse ya da eski bir sürüm yeni diye sunulsa bile kullanıcıya kod gönderilemez. İndirme yalnızca HTTPS üzerinden yapılır.
 
@@ -94,6 +94,7 @@ Uçtan uca test, programın test sürümünü (`-tags e2e`, yalnız testte derle
 
 ## Sürüm notları
 
+- **1.2.2** — Güncelleme denetimi açılıştan 45 saniye yerine 10 saniye sonra yapılıyor. İnternete ulaşılamadığı ya da indirme yarıda kaldığı için başarısız olan denetim 6 saat yerine 10 dakika sonra yineleniyor. Uçtan uca test 138 adım.
 - **1.2.1** — Pencere başlığında sürüm numarası ("HukukFix İndirme Yöneticisi 1.2.1"). Tarayıcı eklentisi henüz hiç bağlanmamışsa sağ altta eklentinin nasıl ekleneceğini gösteren küçük bir uyarı çıkar; eklenti bir kez bağlanınca bir daha gösterilmez. "Güncellemeleri denetle" sonucunu açıkça gösteriyor: denetlerken dönen bir gösterge, güncelse yeşil onay işareti ve "En güncel sürümü kullanıyorsunuz" bildirimi, denetlenemezse nedeni. Ayarlar'ın altındaki sürüm satırı ayraçlarla düzenlendi. Uçtan uca test açık bir HukukFix varken de çalışıyor; 137 adım.
 - **1.2.0** — Tek dosya, kendini kuran program ve otomatik güncelleme. `HukukFixDM.exe` çalıştırılınca `%LOCALAPPDATA%\HukukFixDM` içine kurulur, masaüstüne ve Başlat menüsüne kısayol koyar, "Yüklü uygulamalar"dan kaldırılabilir. Tarayıcı köprüsü programın içine gömüldü; ayrı `HukukFixDM-host.exe` dosyası yok. Yeni sürümler GitHub'dan kendiliğinden iner; Ed25519 imzası, sürüm numarası ve SHA-256 özeti doğrulanınca kurulur. Uçtan uca test 124 adım.
 - **1.1.2** — Ayarlar penceresi aşağı kaymıyordu: pencere ekrandan uzun oluyor, alttaki ayarlar (tarayıcı bölümü, uzantı kurulumu) ekranın dışında kalıyordu. Pencere artık ekrana sığıyor, içerik kendi içinde kayıyor; en küçük pencere boyutunda da. Uçtan uca teste kaydırma ve pencere sığma adımları eklendi (73 adım).

@@ -50,9 +50,11 @@ function yayinla(kip) {
   else if (kip === 'eski-imza') YAYIN = { tag: 'v9.9.9', exe: yeni, sig: imzala('1.0.0', yeni) };
   else if (kip === 'bozuk-dosya') { const b = Buffer.from(yeni); b[b.length >> 1] ^= 0xff; YAYIN = { tag: 'v9.9.9', exe: b, sig: imzala('9.9.9', yeni) }; }
   else if (kip === 'iyi') YAYIN = { tag: 'v9.9.9', exe: yeni, sig: imzala('9.9.9', yeni) };
+  else if (kip === 'kapali') YAYIN = { kapali: true }; // GitHub'a ulaşılamıyor (internet henüz yok)
   else throw new Error('bilinmeyen yayın: ' + kip);
 }
 function yayinYanit(ad, res) {
+  if (YAYIN.kapali) { res.writeHead(503); return res.end(); }
   const adres = (n) => `http://127.0.0.1:${PORT}/guncelleme/${n}`;
   const sig = Buffer.from(JSON.stringify(YAYIN.sig));
   if (ad === 'latest') {
@@ -98,7 +100,8 @@ const dogruMu = (dosya, boy) => { if (!fs.existsSync(dosya)) return 'dosya yok';
 
 // ---------- program ve test kancası ----------
 const ORTAM = { ...process.env, LOCALAPPDATA: VERI, HFDM_E2E_PORT: String(KANCA), HFDM_SHORTCUT_DIR: KISAYOL,
-  HFDM_UPDATE_URL: `http://127.0.0.1:${PORT}/guncelleme/latest`, HFDM_UPDATE_PUBKEY: PUB };
+  HFDM_UPDATE_URL: `http://127.0.0.1:${PORT}/guncelleme/latest`, HFDM_UPDATE_PUBKEY: PUB,
+  HFDM_UPDATE_FIRST: '1000', HFDM_UPDATE_RETRY: '3000' }; // ilk denetim 10 sn yerine 1 sn, yeniden deneme 10 dk yerine 3 sn
 let pid = 0, kurucu = null; // pid: pencereyi açan (kurulu) program; kurucu: testin başlattığı, kendini kurup devreden exe
 const calisiyor = (p) => { if (!p) return false; try { process.kill(p, 0); return true; } catch { return false; } };
 const kopruPid = () => { try { return JSON.parse(fs.readFileSync(path.join(KURULU, 'bridge.json'), 'utf8')).pid; } catch { return 0; } };
@@ -473,14 +476,16 @@ async function testler() {
   sonuc('indirilen dosyalara dokunulmadı', JSON.stringify(fs.readdirSync(INDIR).sort()) === dosyalar);
   pid = 0;
 
-  console.log('Yeniden kurulum ve açılışta güncelleme');
-  ayarYaz();
+  console.log('Yeniden kurulum, açılışta kendiliğinden denetim ve açılışta güncelleme');
+  yayinla('kapali');
+  ayarYaz({ autoUpdate: true });
   await ac();
   sonuc('yeniden kuruldu (' + SURUM + ')', esit(KURULU_EXE, EXE) && (await surumYazisi()) === SURUM);
   sonuc('kısayollar geri geldi', kisayollar('Masaustu').length === 1 && kisayollar('Programlar').length === 1);
+  sonuc('açılıştan hemen sonra kendiliğinden denetledi (GitHub\'a ulaşılamadı)', await bekleKosul(async () => { const d = await guncDurum(); return d.s === 'error' && d.e === 'network'; }, 8000), JSON.stringify(await guncDurum()));
+  yayinla('iyi');
+  sonuc('başarısız denetim kısa süre sonra kendiliğinden yinelendi ve yeni sürüm indi', await bekleKosul(async () => (await guncDurum()).s === 'ready', 40000), JSON.stringify(await guncDurum()));
   await tikla('#btn-settings'); await bekle(300);
-  await tikla('#update-check');
-  sonuc('"Güncellemeleri denetle" yeni sürümü indirdi', await bekleKosul(async () => (await guncDurum()).s === 'ready', 40000), JSON.stringify(await guncDurum()));
   sonuc('ayarlarda "9.9.9 hazır" ve "Yeniden başlat"', (await guncDurum()).yazi === '9.9.9 hazır' && await js(`!document.querySelector('#update-apply2').hidden && document.querySelector('#update-check').hidden`));
   await js(`document.querySelector('#dlg-settings [data-close]')?.click()`);
   await kapat();

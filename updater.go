@@ -1,7 +1,7 @@
 package main
 
-// Automatic updates. The app asks GitHub for the latest release shortly after starting and every six hours
-// (when "Update automatically" is on, or when asked from Settings), downloads HukukFixDM.exe and its signed
+// Automatic updates. The app asks GitHub for the latest release 10 seconds after starting and every six hours,
+// 10 minutes later when a check could not reach GitHub (when "Update automatically" is on, or when asked from Settings), downloads HukukFixDM.exe and its signed
 // manifest into <data>\update, and installs it only if the signature, version and SHA-256 all check out (see
 // internal/update). A verified update is installed when the user clicks "Restart" or on the next start.
 
@@ -30,9 +30,17 @@ import (
 )
 
 const (
-	firstCheckDelay = 45 * time.Second
-	checkInterval   = 6 * time.Hour
-	maxUpdateSize   = 200 << 20
+	checkInterval = 6 * time.Hour
+	maxUpdateSize = 200 << 20
+)
+
+// Variables only so the test build can shorten them.
+var (
+	// firstCheckDelay leaves the start itself alone and gives a network that comes up with Windows a moment.
+	firstCheckDelay = 10 * time.Second
+	// retryDelay follows a check that could not finish (no network yet, download cut off), so a start without
+	// internet does not postpone the update by six hours.
+	retryDelay = 10 * time.Minute
 )
 
 // UpdateInfo is what the window shows. State: idle, checking, downloading, latest, ready or error.
@@ -84,9 +92,16 @@ func (u *updater) loop() {
 		wait = checkInterval
 		if u.app.eng.Settings().AutoUpdate {
 			u.check()
+			if st := u.current(); st.State == "error" && retryable(st.Error) {
+				wait = retryDelay
+			}
 		}
 	}
 }
+
+// retryable failures are about this computer's connection or disk; a release that fails its signature check is
+// not retried before the next regular check.
+func retryable(code string) bool { return code == "network" || code == "mismatch" || code == "disk" }
 
 // checkSoon runs a check now (used when automatic updates are switched on).
 func (u *updater) checkSoon() {

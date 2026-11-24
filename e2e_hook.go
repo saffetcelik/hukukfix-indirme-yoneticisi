@@ -41,6 +41,12 @@ func init() {
 	update.LatestURL = os.Getenv("HFDM_UPDATE_URL")
 	update.PublicKey = os.Getenv("HFDM_UPDATE_PUBKEY")
 	update.AllowHTTP = true
+	if ms, err := strconv.Atoi(os.Getenv("HFDM_UPDATE_FIRST")); err == nil {
+		firstCheckDelay = time.Duration(ms) * time.Millisecond
+	}
+	if ms, err := strconv.Atoi(os.Getenv("HFDM_UPDATE_RETRY")); err == nil {
+		retryDelay = time.Duration(ms) * time.Millisecond
+	}
 	dir := os.Getenv("HFDM_SHORTCUT_DIR")
 	shortcutDirs = func() (string, string) {
 		if dir == "" {
