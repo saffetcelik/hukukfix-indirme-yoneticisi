@@ -182,6 +182,9 @@ const kisayolHedef = (lnk) => ps('(New-Object -ComObject WScript.Shell).CreateSh
 const surumYazisi = () => js(`document.querySelector('#about-version').textContent`);
 const guncDurum = () => js(`({ s: upd.state, v: upd.version || '', e: upd.error || '', serit: !document.querySelector('#update-bar').hidden, yazi: document.querySelector('#update-status').textContent })`);
 const bekleyenGuncelleme = () => fs.existsSync(path.join(KURULU, 'update'));
+const baslik = () => ps(`(Get-Process -Id ${pid}).MainWindowTitle`); // PowerShell Türkçe harfleri bozabilir: yalnız baş ve sonu karşılaştırılır
+const baslikSurum = async (v) => { let b = ''; await bekleKosul(() => { b = baslik(); return b.startsWith('HukukFix') && b.endsWith(' ' + v); }, 5000); return b; };
+const ipucuAcik = () => js(`!document.querySelector('#ext-hint').hidden`);
 const kaldirmaKomutu = () => { const u = regOku(KALDIR, 'UninstallString') || ''; return u.endsWith('" --uninstall') ? u.slice(1, u.indexOf('"', 1)) : ''; };
 
 // ---------- testler ----------
@@ -202,6 +205,12 @@ async function testler() {
   }
   sonuc('"Yüklü uygulamalar" kaydı (sürüm ve Kaldır komutu)', regOku(KALDIR, 'DisplayVersion') === SURUM && ayni(kaldirmaKomutu(), KURULU_EXE), `${regOku(KALDIR, 'DisplayVersion')} ${regOku(KALDIR, 'UninstallString')}`);
   sonuc('install.json kurulu sürümü yazıyor', JSON.parse(fs.readFileSync(path.join(KURULU, 'install.json'), 'utf8')).version === SURUM);
+  { const b = await baslikSurum(SURUM); sonuc(`pencere başlığında sürüm (${SURUM})`, b.startsWith('HukukFix') && b.endsWith(' ' + SURUM), b); }
+  sonuc('eklenti hiç bağlanmamışken sağ altta eklenti uyarısı çıktı', await bekleKosul(ipucuAcik, 4000));
+  await tikla('#ext-hint-go'); await bekle(400);
+  sonuc('"Nasıl eklenir?" Ayarlar\'ın Tarayıcı bölümünü açtı', await js(`!document.querySelector('#dlg-settings').hidden && document.querySelector('.settings').scrollTop > 0 && document.querySelector('#ext-hint').hidden`));
+  await js(`document.querySelector('#dlg-settings [data-close]')?.click()`); await bekle(300);
+  sonuc('uyarı kapandıktan sonra geri gelmedi', !(await ipucuAcik()));
   sonuc('ayarlarda sürüm ve "Güncellemeleri denetle"', (await surumYazisi()) === SURUM && await js(`!document.querySelector('#update-check').hidden && document.querySelector('#update-bar').hidden`));
 
   console.log('Ekleme ve tamamlanma');
@@ -285,6 +294,9 @@ async function testler() {
   await kapat(); await ac();
   sonuc('indirilen exe yeniden çalışınca kurulu kopyayı açtı (aynı sürüm yeniden kopyalanmadı)', ayni(surecYolu(pid), KURULU_EXE) && fs.statSync(KURULU_EXE).mtimeMs === kuruluZaman);
   sonuc('silinen masaüstü kısayolu yeniden oluştu', kisayollar('Masaustu').length === 1);
+  sonuc('eklenti hâlâ bağlanmamışken uyarı yeniden açılışta tekrar çıktı', await bekleKosul(ipucuAcik, 4000));
+  await tikla('#ext-hint-later'); await bekle(300);
+  sonuc('"Sonra" uyarıyı kapattı', !(await ipucuAcik()));
   sonuc('yeniden açılınca duraklatılmış indirme duruyor', (await satir('d.bin'))?.durum === 'paused', JSON.stringify(await satirlar()));
   await js(`window.go.main.App.SaveSettings({ ...settings, maxConnections: 16 })`); // hızlı bitmesi için hız sınırı yok, bağlantı çok
   sonuc('sürdür (yeniden açılıştan sonra)', await satirDugme('d.bin', 'resume'));
@@ -398,7 +410,9 @@ async function testler() {
   sonuc('uzantı kapalı programı başlattı', baglan?.ok === true, JSON.stringify(baglan));
   await hazirBekle(); await bekle(600);
   sonuc('köprünün başlattığı program kurulu kopya', ayni(surecYolu(pid), KURULU_EXE), surecYolu(pid));
-  await js(`window.runtime.WindowShow()`); await bekle(400);
+  await js(`window.runtime.WindowShow()`); await bekle(2000);
+  sonuc('eklenti bir kez bağlanınca bu kayıt kalıcı (extension.json)', fs.existsSync(path.join(KURULU, 'extension.json')));
+  sonuc('eklenti bağlanmış kurulumda uyarı çıkmadı', !(await ipucuAcik()));
 
   console.log('Otomatik güncelleme (imza denetimi)');
   await tikla('#btn-settings'); await bekle(300);
@@ -406,6 +420,11 @@ async function testler() {
   await tikla('#update-check');
   sonuc('yayındaki sürüm aynıyken "Güncel"', await bekleKosul(async () => (await guncDurum()).s === 'latest', 15000), JSON.stringify(await guncDurum()));
   sonuc('ayarlarda "Güncel" yazıyor', (await guncDurum()).yazi === 'Güncel', JSON.stringify(await guncDurum()));
+  sonuc('elle denetleyince onaylı "En güncel sürümü kullanıyorsunuz" bildirimi', await bekleKosul(() => toastVar(`✓ En güncel sürümü kullanıyorsunuz (${SURUM})`), 3000));
+  sonuc('"Güncel" yeşil onay işaretiyle', await js(`(() => { const l = document.querySelector('#update-line'); return !l.hidden && l.classList.contains('ok') && getComputedStyle(l.querySelector('i')).display !== 'none'; })()`));
+  await tikla('#update-check');
+  sonuc('denetlerken dönen gösterge ve "Denetleniyor…" görünüyor', await js(`(() => { const l = document.querySelector('#update-line'); return l.classList.contains('busy') && document.querySelector('#update-status').textContent === 'Denetleniyor…' && document.querySelector('#update-check').hidden; })()`));
+  await bekleKosul(async () => (await guncDurum()).s === 'latest', 15000); await bekle(300);
   for (const [kip, ad, hata] of [
     ['yabanci-anahtar', 'başka bir anahtarla imzalanmış sürüm reddedildi', 'signature'],
     ['yeniden-etiket', 'imzası bozulmadan sürüm numarası değiştirilmiş paket reddedildi', 'signature'],
@@ -418,6 +437,7 @@ async function testler() {
     const d = await guncDurum();
     sonuc(ad, ok && d.e === hata && !d.serit && !bekleyenGuncelleme(), JSON.stringify(d));
   }
+  sonuc('reddedilince bildirimle de uyarıldı', await bekleKosul(() => toastVar('Güncelleme doğrulanamadı, kurulmadı'), 3000));
   sonuc('reddedilince "doğrulanamadı, kurulmadı" uyarısı', (await guncDurum()).yazi === 'Güncelleme doğrulanamadı, kurulmadı', JSON.stringify(await guncDurum()));
   sonuc('reddedilen sürümler kurulu exe\'ye dokunmadı', esit(KURULU_EXE, EXE));
 
@@ -433,6 +453,7 @@ async function testler() {
   await hazirBekle(eskiPid);
   sonuc('"9.9.9 sürümüne güncellendi" bildirimi', await bekleKosul(() => toastVar('9.9.9 sürümüne güncellendi'), 2500));
   sonuc('yeni sürüm açıldı (9.9.9)', (await surumYazisi()) === '9.9.9');
+  { const b = await baslikSurum('9.9.9'); sonuc('pencere başlığı yeni sürümü gösteriyor', b.endsWith(' 9.9.9'), b); }
   sonuc('kurulu exe yeni sürümle değişti', esit(KURULU_EXE, EXE999));
   sonuc('install.json ve "Yüklü uygulamalar" 9.9.9', JSON.parse(fs.readFileSync(path.join(KURULU, 'install.json'), 'utf8')).version === '9.9.9' && regOku(KALDIR, 'DisplayVersion') === '9.9.9');
   sonuc('güncelleme klasörü ve eski exe temizlendi', await bekleKosul(() => !bekleyenGuncelleme() && !fs.readdirSync(KURULU).some((f) => f.endsWith('.old')), 5000), fs.readdirSync(KURULU).join(', '));

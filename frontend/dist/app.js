@@ -25,6 +25,9 @@ let settings = {};
 let defaultExts = [];
 let extInfo = { dir: '', hostFound: true, connected: false, browsers: [] };
 let upd = { state: 'idle' };
+let appVersion = '';
+let manualCheckAt = 0; // set while a check started from Settings is running: its result is announced
+let hintReady = false, hintClosed = false;
 let updDismissed = '';
 let stats = { active: 0, speed: 0 };
 
@@ -543,11 +546,19 @@ $('#ext-copy').onclick = () => { api.CopyText(extInfo.dir); toast(t('copied')); 
 $('#ext-open').onclick = () => api.OpenExtensionFolder();
 
 const BROWSER_NAMES = { chrome: 'Chrome', edge: 'Edge', brave: 'Brave' };
+// The hint shows until the extension has reached this installation once ("Later" hides it until the next start).
+function renderHint() {
+  $('#ext-hint').hidden = !hintReady || hintClosed || extInfo.known || extInfo.connected;
+}
+$('#ext-hint-go').onclick = () => { hintClosed = true; renderHint(); openSettings(true); };
+$('#ext-hint-later').onclick = () => { hintClosed = true; renderHint(); };
+
 function renderExt() {
   $('#ext-state').textContent = t(extInfo.connected ? 'extConnected' : 'extNotConnected');
   $('#ext-card .dot').className = 'dot' + (extInfo.connected ? ' on' : '');
   $('#ext-dir').textContent = extInfo.dir;
   $('#ext-warn').hidden = extInfo.hostFound;
+  renderHint();
   const box = $('#ext-browsers');
   box.innerHTML = '';
   for (const b of extInfo.browsers || []) {
@@ -580,14 +591,31 @@ function renderUpdate() {
   if (ready) $('#update-text').textContent = t('upReady', { v: upd.version });
   $('#update-notes').hidden = !upd.notes;
   const bad = upd.error === 'signature' || upd.error === 'mismatch';
-  $('#update-status').textContent = {
+  const text = {
     checking: t('upChecking'), downloading: t('upDownloading', { v: upd.version }), latest: t('upLatest'),
     ready: t('upReadyShort', { v: upd.version }), error: t(bad ? 'upBad' : 'upError'),
   }[upd.state] || '';
-  $('#update-check').hidden = ready || upd.state === 'checking' || upd.state === 'downloading';
+  const busy = upd.state === 'checking' || upd.state === 'downloading';
+  $('#update-status').textContent = text;
+  $('#update-line').hidden = !text;
+  $('#update-line').className = 'upd' + (busy ? ' busy' : upd.state === 'latest' ? ' ok' : upd.state === 'error' ? ' bad' : '');
+  $('#update-check').hidden = ready || busy;
   $('#update-apply2').hidden = !ready;
 }
-function onUpdate(info) { upd = info || { state: 'idle' }; renderUpdate(); }
+function onUpdate(info) {
+  info = info || { state: 'idle' };
+  const final = info.state === 'latest' || info.state === 'error' || info.state === 'ready';
+  // A check asked for by hand shows "Checking…" for a moment even when GitHub answers at once, then says how it went.
+  const wait = manualCheckAt && final ? 800 - (Date.now() - manualCheckAt) : 0;
+  if (wait > 0) { setTimeout(() => onUpdate(info), wait); return; }
+  upd = info;
+  if (manualCheckAt && final) {
+    manualCheckAt = 0;
+    if (info.state === 'latest') toast('✓ ' + t('upLatestToast', { v: appVersion }), 4000);
+    else if (info.state === 'error') toast(t(info.error === 'signature' || info.error === 'mismatch' ? 'upBad' : 'upErrorToast'), 5000);
+  }
+  renderUpdate();
+}
 async function applyUpdate() {
   $('#update-apply').disabled = true;
   try { await api.ApplyUpdate(); } catch { toast(t('upFailed')); $('#update-apply').disabled = false; }
@@ -596,7 +624,12 @@ $('#update-apply').onclick = applyUpdate;
 $('#update-apply2').onclick = applyUpdate;
 $('#update-notes').onclick = () => api.OpenReleaseNotes().catch(() => {});
 $('#update-close').onclick = () => { updDismissed = upd.version; renderUpdate(); };
-$('#update-check').onclick = () => { onUpdate({ state: 'checking' }); api.CheckForUpdates(); };
+$('#update-check').onclick = () => {
+  manualCheckAt = Date.now();
+  onUpdate({ state: 'checking' });
+  api.CheckForUpdates();
+  setTimeout(() => { if (manualCheckAt && upd.state === 'checking') onUpdate({ state: 'error', error: 'network' }); }, 60000);
+};
 
 // ---------- boot ----------
 function mockBackend() {
@@ -623,7 +656,7 @@ function mockBackend() {
   return {
     Init: async () => ({ version: 'preview', lang: (navigator.language || 'en').startsWith('tr') ? 'tr' : 'en', settings: s,
       state: { all, live: all.filter(isActive), active: 1, speed: 41.5 * M },
-      extension: { dir: 'C:\\Users\\you\\AppData\\Local\\HukukFixDM\\extension', hostFound: true, connected: false, browsers: ['chrome', 'edge'] }, defaultCaptureExts: s.captureExts }),
+      extension: { dir: 'C:\\Users\\you\\AppData\\Local\\HukukFixDM\\extension', hostFound: true, connected: false, known: false, browsers: ['chrome', 'edge'] }, defaultCaptureExts: s.captureExts }),
     Extension: async () => extInfo, SaveSettings: async (x) => x, ClipboardURL: async () => '', ChooseFolder: async () => '',
     Add: async () => 0, Pause: noop, Resume: noop, Remove: noop, PauseAll: noop, ResumeAll: noop, ClearFinished: noop, OpenFile: noop,
     ShowInFolder: noop, CopyText: noop, OpenExtensionFolder: noop, OpenExtensionsPage: noop, OpenDownloadFolder: noop,
@@ -648,11 +681,13 @@ async function waitForBackend() {
   defaultExts = init.defaultCaptureExts || [];
   extInfo = init.extension;
   $('#about-version').textContent = init.version;
+  appVersion = init.version;
   upd = init.update || { state: 'idle' };
   applyTheme();
   onState(init.state);
   applyI18n();
   if (init.updatedFrom) toast(t('updated', { v: init.version }), 8000);
+  setTimeout(() => { hintReady = true; renderHint(); }, 1500); // let an open browser's extension check in first
   if (window.runtime?.EventsOn) {
     window.runtime.EventsOn('state', onState);
     window.runtime.EventsOn('update', onUpdate);

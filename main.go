@@ -21,6 +21,10 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// instanceID makes a second start hand its arguments to the running copy. The test build uses its own, so
+// tests can run while the real HukukFix is open.
+var instanceID = "hukukfix-download-manager-7c1f3a52"
+
 func main() {
 	background, uninstalling, quiet, after := false, false, false, 0
 	var urls, passOn []string // passOn: what a hand-over to another copy keeps
@@ -68,7 +72,7 @@ func main() {
 	app.updatedFrom = updatedFrom
 
 	err = wails.Run(&options.App{
-		Title:             displayName(),
+		Title:             displayName() + " " + shared.Version, // like "Internet Download Manager 6.42"
 		Width:             980,
 		Height:            660,
 		MinWidth:          620,
@@ -81,7 +85,7 @@ func main() {
 		OnShutdown:        app.shutdown,
 		Bind:              []interface{}{app},
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId: "hukukfix-download-manager-7c1f3a52",
+			UniqueId: instanceID,
 			OnSecondInstanceLaunch: func(d options.SecondInstanceData) {
 				app.secondInstance(d.Args)
 			},

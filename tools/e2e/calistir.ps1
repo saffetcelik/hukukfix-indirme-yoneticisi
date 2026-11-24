@@ -4,7 +4,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File tools\e2e\calistir.ps1
 #
-# Çalışan bir HukukFixDM varsa önce kapatın (tek örnek kilidi testi engeller).
+# Açık olan HukukFix'i kapatmak gerekmez: test sürümü kendi tek örnek anahtarını, kendi veri klasörünü kullanır.
 
 # 'Continue': reg.exe başarı iletisini hata akışına yazar; PowerShell 5.1'de 'Stop' bunu hata sayıp geri yüklemeyi keserdi.
 $ErrorActionPreference = 'Continue'
@@ -18,7 +18,10 @@ $kaldirAnahtar = "Software\Microsoft\Windows\CurrentVersion\Uninstall\$appId"
 Set-Location (Join-Path $PSScriptRoot '..\..')
 $kok = (Get-Location).Path
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) { $local = Join-Path $env:LOCALAPPDATA 'go-toolchain\go\bin'; if (Test-Path (Join-Path $local 'go.exe')) { $env:Path = "$local;$env:Path" } }
-if (Get-Process HukukFixDM, HukukFixDM-e2e, HukukFixDM-e2e-999 -ErrorAction SilentlyContinue) { Write-Error 'HukukFixDM açık; önce tepsi simgesinden Çıkış yapın.'; exit 2 }
+# Önceki bir testten kalmış test programları (yalnız geçici klasörden ya da build\bin'den çalışanlar) kapatılır.
+Get-Process HukukFixDM* -ErrorAction SilentlyContinue |
+  Where-Object { $_.Path -and ($_.Path -like '*\hfdm-e2e-*' -or $_.Path -like "$kok\build\bin\*") } |
+  Stop-Process -Force
 
 $yedek = Join-Path ([IO.Path]::GetTempPath()) ('hfdm-e2e-reg-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $yedek | Out-Null

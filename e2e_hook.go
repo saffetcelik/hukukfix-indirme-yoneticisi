@@ -35,6 +35,7 @@ func init() {
 		os.Exit(3)
 	}
 	e2eHook = startE2EHook
+	instanceID += "-e2e"
 	// A test build never talks to GitHub and never touches the real desktop or Start menu: the updater uses the
 	// test server and throwaway key tools/e2e passes in, shortcuts go to a folder of the test (or nowhere).
 	update.LatestURL = os.Getenv("HFDM_UPDATE_URL")

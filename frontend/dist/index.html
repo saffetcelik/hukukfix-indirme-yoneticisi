@@ -169,8 +169,19 @@
         <p id="ext-warn" class="error" hidden data-t="hostMissing"></p>
       </div>
 
-      <p class="about">HukukFix İndirme Yöneticisi <span id="about-version"></span><span id="update-status"></span>
-        <button id="update-check" class="link" data-t="checkUpdates"></button><button id="update-apply2" class="link" data-t="upRestart" hidden></button></p>
+      <p class="about"><span>HukukFix İndirme Yöneticisi <span id="about-version"></span></span><span id="update-line" class="upd" hidden><i></i><span id="update-status"></span></span><button id="update-check" class="link" data-t="checkUpdates"></button><button id="update-apply2" class="link" data-t="upRestart" hidden></button></p>
+    </div>
+  </div>
+</div>
+
+<div id="ext-hint" class="ext-hint" role="dialog" aria-labelledby="ext-hint-title" hidden>
+  <svg viewBox="0 0 16 16"><path d="M6 2.5h2.5v1.2a1.3 1.3 0 1 0 2.6 0V2.5H13.5v3.3h-1.2a1.3 1.3 0 1 0 0 2.6h1.2v5.1H2.5V8.4h1.2a1.3 1.3 0 1 0 0-2.6H2.5V2.5H6z"/></svg>
+  <div>
+    <b id="ext-hint-title" data-t="hintTitle"></b>
+    <p data-t="hintText"></p>
+    <div class="ext-hint-actions">
+      <button id="ext-hint-go" class="btn primary" data-t="hintGo"></button>
+      <button id="ext-hint-later" class="btn" data-t="hintLater"></button>
     </div>
   </div>
 </div>

@@ -30,6 +30,7 @@ type App struct {
 	extDir    string
 	hostFound bool
 	extSeen   atomic.Int64 // unix seconds the extension last called
+	extKnown  atomic.Bool  // the extension has talked to this installation at least once
 
 	emit    chan struct{}
 	mu      sync.Mutex
@@ -44,7 +45,21 @@ type App struct {
 var e2eHook func(*App)
 
 func newApp(eng *engine.Engine, dataDir string, background bool, urls []string) *App {
-	return &App{eng: eng, dataDir: dataDir, background: background, initialURLs: urls, emit: make(chan struct{}, 1)}
+	a := &App{eng: eng, dataDir: dataDir, background: background, initialURLs: urls, emit: make(chan struct{}, 1)}
+	a.extKnown.Store(extensionKnown(dataDir))
+	return a
+}
+
+// extensionKnown tells whether a browser extension has ever reached this installation: extension.json is
+// written on its first call; host.log (written by the native messaging host, which browsers start only for
+// our extension) covers installations from before 1.2.1. The window uses it to suggest installing the
+// extension only to people who have not done so, even while their browser happens to be closed.
+func extensionKnown(dataDir string) bool {
+	if fileExists(filepath.Join(dataDir, "extension.json")) {
+		return true
+	}
+	log, err := os.ReadFile(filepath.Join(dataDir, "host.log"))
+	return err == nil && strings.Contains(string(log), "chrome-extension://"+shared.ExtensionID+"/")
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -193,7 +208,12 @@ func (a *App) captured(s engine.Snapshot) {
 	runtime.EventsEmit(a.ctx, "captured", s.ID)
 }
 
-func (a *App) extensionSeen() { a.extSeen.Store(time.Now().Unix()) }
+func (a *App) extensionSeen() {
+	a.extSeen.Store(time.Now().Unix())
+	if a.extKnown.CompareAndSwap(false, true) {
+		_ = os.WriteFile(filepath.Join(a.dataDir, "extension.json"), []byte(`{"firstSeen":"`+time.Now().UTC().Format(time.RFC3339)+`"}`), 0o644)
+	}
+}
 
 func (a *App) finished(s engine.Snapshot) {
 	if !a.notify || !a.eng.Settings().Notify {
@@ -229,6 +249,7 @@ type ExtensionInfo struct {
 	ID        string   `json:"id"`
 	HostFound bool     `json:"hostFound"`
 	Connected bool     `json:"connected"`
+	Known     bool     `json:"known"` // has ever connected (installed), even if the browser is closed now
 	Browsers  []string `json:"browsers"`
 }
 
@@ -261,6 +282,7 @@ func (a *App) Extension() ExtensionInfo {
 		ID:        shared.ExtensionID,
 		HostFound: a.hostFound,
 		Connected: seen > 0 && time.Now().Unix()-seen < 120,
+		Known:     a.extKnown.Load(),
 		Browsers:  browsers,
 	}
 }
