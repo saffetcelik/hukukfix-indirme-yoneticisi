@@ -9,3 +9,9 @@ frontend/wailsjs/
 
 # private key of the browser extension (only needed to pack a .crx) — never commit
 extension-key.pem
+
+# browser bridge copied here by build.ps1 to be embedded in HukukFixDM.exe
+hostbin/*.exe
+
+# release output of build.ps1 -Sign
+build/release/

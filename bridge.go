@@ -59,6 +59,7 @@ func startBridge(app *App, dataDir string) (*bridge, error) {
 	mux.HandleFunc("/v1/download", b.guard(b.download))
 	mux.HandleFunc("/v1/downloads", b.guard(b.downloads))
 	mux.HandleFunc("/v1/action", b.guard(b.action))
+	mux.HandleFunc("/v1/app/quit", b.guard(b.quit))
 	b.srv = &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -116,6 +117,21 @@ func (b *bridge) guard(h func(http.ResponseWriter, *http.Request)) http.HandlerF
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// quit is used by a newer HukukFixDM.exe that is installing itself over this one. The native messaging host
+// never sends the X-HFDM-Internal header and web pages cannot know the token, so neither the extension nor a
+// page can close the app this way.
+func (b *bridge) quit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost || r.Header.Get("Origin") != "" || r.Header.Get("X-HFDM-Internal") != "quit" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		b.app.Quit()
+	}()
 }
 
 func (b *bridge) status(w http.ResponseWriter, r *http.Request) {

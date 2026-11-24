@@ -43,10 +43,10 @@ var nativeHostKeys = []string{
 	`Software\Vivaldi\NativeMessagingHosts\`,
 }
 
-// registerNativeHost points the browsers at HukukFixDM-host.exe. It runs on every
-// start so moving the program folder never breaks the integration.
+// registerNativeHost points the browsers at HukukFixDM-host.exe, which prepareInstall
+// keeps in the data folder. It runs on every start so the registry always matches.
 func registerNativeHost(dataDir string) (bool, error) {
-	host := filepath.Join(filepath.Dir(exePath()), shared.HostExe)
+	host := filepath.Join(dataDir, shared.HostExe)
 	if _, err := os.Stat(host); err != nil {
 		return false, nil
 	}

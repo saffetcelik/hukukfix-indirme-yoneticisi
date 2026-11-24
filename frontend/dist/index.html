@@ -24,6 +24,15 @@
   <button id="btn-settings" class="btn icon" data-tt="settings"><svg viewBox="0 0 16 16"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg></button>
 </header>
 
+<div id="update-bar" class="update-bar" role="status" hidden>
+  <svg viewBox="0 0 16 16"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>
+  <span id="update-text"></span>
+  <button id="update-notes" class="link" data-t="upNotes"></button>
+  <div class="spacer"></div>
+  <button id="update-apply" class="btn primary" data-t="upRestart"></button>
+  <button id="update-close" class="btn icon" data-tt="upLater"><svg viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+</div>
+
 <nav class="tabs" id="tabs">
   <button data-filter="all" class="on"><span data-t="tabAll"></span><b id="n-all">0</b></button>
   <button data-filter="active"><span data-t="tabActive"></span><b id="n-active">0</b></button>
@@ -104,6 +113,10 @@
         <input type="checkbox" class="switch" data-set="notify">
       </div>
       <div class="set">
+        <div><label data-t="setAutoUpdate"></label><small data-t="setAutoUpdateHint"></small></div>
+        <input type="checkbox" class="switch" data-set="autoUpdate">
+      </div>
+      <div class="set">
         <div><label data-t="setLanguage"></label></div>
         <select data-set="language"><option value="auto" data-t="optAuto"></option><option value="tr">Türkçe</option><option value="en">English</option></select>
       </div>
@@ -156,7 +169,8 @@
         <p id="ext-warn" class="error" hidden data-t="hostMissing"></p>
       </div>
 
-      <p class="about">HukukFix İndirme Yöneticisi <span id="about-version"></span></p>
+      <p class="about">HukukFix İndirme Yöneticisi <span id="about-version"></span><span id="update-status"></span>
+        <button id="update-check" class="link" data-t="checkUpdates"></button><button id="update-apply2" class="link" data-t="upRestart" hidden></button></p>
     </div>
   </div>
 </div>

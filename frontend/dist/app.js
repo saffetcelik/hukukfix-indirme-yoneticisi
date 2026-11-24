@@ -24,6 +24,8 @@ let sysLang = 'en';
 let settings = {};
 let defaultExts = [];
 let extInfo = { dir: '', hostFound: true, connected: false, browsers: [] };
+let upd = { state: 'idle' };
+let updDismissed = '';
 let stats = { active: 0, speed: 0 };
 
 const items = new Map();
@@ -97,6 +99,7 @@ function applyI18n() {
   render();
   renderStatus();
   renderExt();
+  renderUpdate();
 }
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
@@ -279,12 +282,12 @@ function renderStatus() {
 }
 
 // ---------- actions ----------
-function toast(text) {
+function toast(text, ms = 2600) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = text;
   $('#toasts').appendChild(el);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, 2600);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, ms);
 }
 
 function confirmDialog(title, text, okLabel) {
@@ -570,6 +573,31 @@ function openSettings(toBrowser) {
 setInterval(refreshExtQuiet, 5000);
 function refreshExtQuiet() { if (api && !document.hidden) refreshExt().catch(() => {}); }
 
+// ---------- updates ----------
+function renderUpdate() {
+  const ready = upd.state === 'ready';
+  $('#update-bar').hidden = !ready || updDismissed === upd.version;
+  if (ready) $('#update-text').textContent = t('upReady', { v: upd.version });
+  $('#update-notes').hidden = !upd.notes;
+  const bad = upd.error === 'signature' || upd.error === 'mismatch';
+  $('#update-status').textContent = {
+    checking: t('upChecking'), downloading: t('upDownloading', { v: upd.version }), latest: t('upLatest'),
+    ready: t('upReadyShort', { v: upd.version }), error: t(bad ? 'upBad' : 'upError'),
+  }[upd.state] || '';
+  $('#update-check').hidden = ready || upd.state === 'checking' || upd.state === 'downloading';
+  $('#update-apply2').hidden = !ready;
+}
+function onUpdate(info) { upd = info || { state: 'idle' }; renderUpdate(); }
+async function applyUpdate() {
+  $('#update-apply').disabled = true;
+  try { await api.ApplyUpdate(); } catch { toast(t('upFailed')); $('#update-apply').disabled = false; }
+}
+$('#update-apply').onclick = applyUpdate;
+$('#update-apply2').onclick = applyUpdate;
+$('#update-notes').onclick = () => api.OpenReleaseNotes().catch(() => {});
+$('#update-close').onclick = () => { updDismissed = upd.version; renderUpdate(); };
+$('#update-check').onclick = () => { onUpdate({ state: 'checking' }); api.CheckForUpdates(); };
+
 // ---------- boot ----------
 function mockBackend() {
   // Stand-in used only when the page is opened outside the app (design preview).
@@ -590,7 +618,7 @@ function mockBackend() {
     mk('7', 'wallpaper-pack.png', 'completed', 12 * M, 12 * M, { category: 'image', finishedAt: now - 4e8 }),
   ];
   const s = { downloadDir: 'C:\\Users\\you\\Downloads', categoryFolders: false, maxConnections: 8, maxActive: 3, speedLimitKB: 0, capture: true,
-    captureExts: ['zip', 'exe', 'mp4', 'pdf'], captureMinKB: 0, showOnCapture: true, notify: true, autostart: false, language: 'auto', theme: 'system' };
+    captureExts: ['zip', 'exe', 'mp4', 'pdf'], captureMinKB: 0, showOnCapture: true, notify: true, autostart: false, language: 'auto', theme: 'system', autoUpdate: true };
   const noop = async () => {};
   return {
     Init: async () => ({ version: 'preview', lang: (navigator.language || 'en').startsWith('tr') ? 'tr' : 'en', settings: s,
@@ -599,6 +627,7 @@ function mockBackend() {
     Extension: async () => extInfo, SaveSettings: async (x) => x, ClipboardURL: async () => '', ChooseFolder: async () => '',
     Add: async () => 0, Pause: noop, Resume: noop, Remove: noop, PauseAll: noop, ResumeAll: noop, ClearFinished: noop, OpenFile: noop,
     ShowInFolder: noop, CopyText: noop, OpenExtensionFolder: noop, OpenExtensionsPage: noop, OpenDownloadFolder: noop,
+    CheckForUpdates: noop, ApplyUpdate: noop, OpenReleaseNotes: noop,
   };
 }
 
@@ -619,11 +648,14 @@ async function waitForBackend() {
   defaultExts = init.defaultCaptureExts || [];
   extInfo = init.extension;
   $('#about-version').textContent = init.version;
+  upd = init.update || { state: 'idle' };
   applyTheme();
   onState(init.state);
   applyI18n();
+  if (init.updatedFrom) toast(t('updated', { v: init.version }), 8000);
   if (window.runtime?.EventsOn) {
     window.runtime.EventsOn('state', onState);
+    window.runtime.EventsOn('update', onUpdate);
     window.runtime.EventsOn('captured', (id) => {
       showAll();
       requestAnimationFrame(() => requestAnimationFrame(() => {

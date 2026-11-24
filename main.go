@@ -5,6 +5,9 @@ import (
 	"embed"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -19,23 +22,50 @@ import (
 var assets embed.FS
 
 func main() {
-	background := false
-	var urls []string
+	background, uninstalling, quiet, after := false, false, false, 0
+	var urls, passOn []string // passOn: what a hand-over to another copy keeps
 	for _, arg := range os.Args[1:] {
-		if arg == "--background" {
+		switch {
+		case arg == "--background":
 			background = true
-		} else if isHTTPURL(arg) {
+			passOn = append(passOn, arg)
+		case arg == "--uninstall": // from Windows' "Installed apps" list
+			uninstalling = true
+		case arg == "--yes":
+			quiet = true
+		case strings.HasPrefix(arg, "--after="): // started by an update: let the old version exit first
+			after, _ = strconv.Atoi(strings.TrimPrefix(arg, "--after="))
+		case isHTTPURL(arg):
 			urls = append(urls, arg)
+			passOn = append(passOn, arg)
 		}
 	}
-
 	dataDir := shared.DataDir()
+	updatedFrom := ""
+	if installSteps { // never in the binary "wails build" runs to generate bindings (see buildmode.go)
+		if uninstalling {
+			uninstall(quiet)
+			return
+		}
+		if after > 0 {
+			waitForExit(after, 20*time.Second)
+		}
+		if selfInstall(passOn) {
+			return // the installed copy took over
+		}
+		if applyStagedUpdate(dataDir, passOn) {
+			return // the new version took over
+		}
+		updatedFrom = prepareInstall(dataDir)
+	}
+
 	eng, err := engine.New(dataDir)
 	if err != nil {
 		fatalBox("HukukFix could not open its data folder:\n" + err.Error())
 		os.Exit(1)
 	}
 	app := newApp(eng, dataDir, background, urls)
+	app.updatedFrom = updatedFrom
 
 	err = wails.Run(&options.App{
 		Title:             displayName(),

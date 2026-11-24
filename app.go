@@ -35,6 +35,9 @@ type App struct {
 	mu      sync.Mutex
 	listSig string
 	notify  bool
+
+	upd         *updater
+	updatedFrom string // set on the first start after an update
 }
 
 // e2eHook is set by e2e_hook.go, which is compiled only with -tags e2e.
@@ -66,6 +69,9 @@ func (a *App) startup(ctx context.Context) {
 	if err := runtime.InitializeNotifications(ctx); err == nil {
 		a.notify = true
 	}
+
+	a.upd = newUpdater(a, a.dataDir)
+	a.upd.start()
 
 	go a.emitLoop()
 	if e2eHook != nil {
@@ -208,12 +214,14 @@ func (a *App) finished(s engine.Snapshot) {
 
 // InitData is everything the window needs to draw its first frame.
 type InitData struct {
-	Version   string          `json:"version"`
-	Lang      string          `json:"lang"`
-	Settings  engine.Settings `json:"settings"`
-	State     StatePayload    `json:"state"`
-	Extension ExtensionInfo   `json:"extension"`
-	Defaults  []string        `json:"defaultCaptureExts"`
+	Version     string          `json:"version"`
+	Lang        string          `json:"lang"`
+	Settings    engine.Settings `json:"settings"`
+	State       StatePayload    `json:"state"`
+	Extension   ExtensionInfo   `json:"extension"`
+	Defaults    []string        `json:"defaultCaptureExts"`
+	Update      UpdateInfo      `json:"update"`
+	UpdatedFrom string          `json:"updatedFrom,omitempty"`
 }
 
 type ExtensionInfo struct {
@@ -225,14 +233,21 @@ type ExtensionInfo struct {
 }
 
 func (a *App) Init() InitData {
-	return InitData{
-		Version:   shared.Version,
-		Lang:      systemLang(),
-		Settings:  a.eng.Settings(),
-		State:     a.payload(true),
-		Extension: a.Extension(),
-		Defaults:  engine.DefaultCaptureExts,
+	d := InitData{
+		Version:     shared.Version,
+		Lang:        systemLang(),
+		Settings:    a.eng.Settings(),
+		State:       a.payload(true),
+		Extension:   a.Extension(),
+		Defaults:    engine.DefaultCaptureExts,
+		Update:      UpdateInfo{State: "idle"},
+		UpdatedFrom: a.updatedFrom,
 	}
+	a.updatedFrom = "" // say "updated" once, not on every reload of the page
+	if a.upd != nil {
+		d.Update = a.upd.current()
+	}
+	return d
 }
 
 func (a *App) Extension() ExtensionInfo {
@@ -313,7 +328,11 @@ func (a *App) ChooseFolder(current string) string {
 }
 
 func (a *App) SaveSettings(s engine.Settings) engine.Settings {
+	wasAuto := a.eng.Settings().AutoUpdate
 	s = a.eng.SetSettings(s)
+	if s.AutoUpdate && !wasAuto && a.upd != nil {
+		a.upd.checkSoon()
+	}
 	_ = setAutostart(s.Autostart)
 	a.applyTheme(s.Theme)
 	refreshTray(a.lang())

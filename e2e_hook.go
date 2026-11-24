@@ -11,12 +11,15 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"hukukfixdm/internal/update"
 )
 
 var (
@@ -25,7 +28,26 @@ var (
 	e2eWaiting = map[string]chan string{}
 )
 
-func init() { e2eHook = startE2EHook }
+func init() {
+	// The test build runs only under tools/e2e. Started any other way (for instance by a real browser through a
+	// host the test registered for a moment) it would work on the user's real data folder, so it refuses.
+	if os.Getenv("HFDM_E2E_PORT") == "" && installSteps {
+		os.Exit(3)
+	}
+	e2eHook = startE2EHook
+	// A test build never talks to GitHub and never touches the real desktop or Start menu: the updater uses the
+	// test server and throwaway key tools/e2e passes in, shortcuts go to a folder of the test (or nowhere).
+	update.LatestURL = os.Getenv("HFDM_UPDATE_URL")
+	update.PublicKey = os.Getenv("HFDM_UPDATE_PUBKEY")
+	update.AllowHTTP = true
+	dir := os.Getenv("HFDM_SHORTCUT_DIR")
+	shortcutDirs = func() (string, string) {
+		if dir == "" {
+			return "", ""
+		}
+		return filepath.Join(dir, "Masaustu"), filepath.Join(dir, "Programlar")
+	}
+}
 
 func startE2EHook(a *App) {
 	port := os.Getenv("HFDM_E2E_PORT")
@@ -42,12 +64,16 @@ func startE2EHook(a *App) {
 		e2eMu.Unlock()
 		js := fmt.Sprintf(`(async () => { let v, e; try { v = await (async () => (%s))(); } catch (x) { e = String((x && x.stack) || x); }
 			window.go.main.App.E2EResult(%q, JSON.stringify({ v: v === undefined ? null : v, e: e || null })); })()`, expr, id)
+		wait := 20 * time.Second
+		if ms, err := strconv.Atoi(r.URL.Query().Get("t")); err == nil && ms > 0 && ms < 20000 {
+			wait = time.Duration(ms) * time.Millisecond
+		}
 		runtime.WindowExecJS(a.ctx, js)
 		select {
 		case res := <-ch:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, res)
-		case <-time.After(20 * time.Second):
+		case <-time.After(wait):
 			http.Error(w, "timeout", http.StatusGatewayTimeout)
 		}
 		e2eMu.Lock()

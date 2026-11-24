@@ -1,6 +1,8 @@
 // Uçtan uca test: programın test sürümünü (HukukFixDM-e2e.exe, -tags e2e) geçici bir veri klasörüyle açar, arayüzdeki
 // düğmelere gerçekten basar (e2e_hook.go: pencerede JavaScript çalıştırır) ve sonucu hem pencerede hem diskte doğrular. İndirmeler yalnız bu
-// betiğin 127.0.0.1'de açtığı test sunucusundan yapılır; internete çıkılmaz.
+// betiğin 127.0.0.1'de açtığı test sunucusundan yapılır; internete çıkılmaz. Kurulum geçici klasöre yapılır, kısayollar geçici
+// klasördeki Masaustu/Programlar klasörlerine düşer; güncelleme testi GitHub yerine bu sunucuyu ve testin ürettiği geçici imza
+// anahtarını kullanır, yeni sürüm olarak 9.9.9 numaralı test derlemesini (HukukFixDM-e2e-999.exe) sunar.
 //
 //   powershell -ExecutionPolicy Bypass -File tools\e2e\calistir.ps1      (kayıt defterini yedekler ve geri yükler)
 //
@@ -11,17 +13,58 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 
 const KOK = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..', '..');
 const EXE = process.env.HFDM_EXE || path.join(KOK, 'build', 'bin', 'HukukFixDM-e2e.exe');
-const HOST = path.join(KOK, 'build', 'bin', 'HukukFixDM-host.exe');
+const EXE999 = path.join(KOK, 'build', 'bin', 'HukukFixDM-e2e-999.exe'); // aynı kod, sürüm numarası 9.9.9
+const HOST_YAPI = path.join(KOK, 'build', 'bin', 'HukukFixDM-host.exe');   // programın içine gömülen köprünün derlenmiş hâli
+const SURUM = /var Version = "([^"]+)"/.exec(fs.readFileSync(path.join(KOK, 'internal', 'shared', 'shared.go'), 'utf8'))[1];
 const GECICI = fs.mkdtempSync(path.join(os.tmpdir(), 'hfdm-e2e-'));
-const VERI = path.join(GECICI, 'veri'), INDIR = path.join(GECICI, 'indirilenler');
+const VERI = path.join(GECICI, 'veri'), INDIR = path.join(GECICI, 'indirilenler'), KISAYOL = path.join(GECICI, 'kisayol');
+const KURULU = path.join(VERI, 'HukukFixDM'), KURULU_EXE = path.join(KURULU, 'HukukFixDM.exe');
+const HOST = path.join(KURULU, 'HukukFixDM-host.exe'); // tarayıcıların çalıştırdığı, programdan çıkarılan köprü
+const KALDIR = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\HukukFixDM';
+const NMH_CHROME = 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.hukukfix.downloadmanager';
 const PORT = 47231, KANCA = 47232;
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 let gecen = 0, kalan = 0; const hatalar = [];
 const sonuc = (ad, ok, ayrinti = '') => { if (ok) { gecen++; console.log(`  ✓ ${ad}`); } else { kalan++; hatalar.push(ad); console.log(`  ✗ ${ad}  ${ayrinti}`); } };
+
+// ---------- güncelleme yayını (GitHub'ın yerine) ----------
+// internal/update ile aynı imza metni; anahtar her test için yeniden üretilir ve programa HFDM_UPDATE_PUBKEY ile verilir.
+const ANAHTAR = crypto.generateKeyPairSync('ed25519');
+const PUB = Buffer.from(ANAHTAR.publicKey.export({ format: 'jwk' }).x, 'base64url').toString('base64');
+function imzala(surum, veri, gizli = ANAHTAR.privateKey) {
+  const sha256 = crypto.createHash('sha256').update(veri).digest('hex');
+  const m = { version: surum, size: veri.length, sha256 };
+  m.signature = crypto.sign(null, Buffer.from(`HukukFixDM update v1\nversion=${surum}\nsize=${veri.length}\nsha256=${sha256}\n`), gizli).toString('base64');
+  return m;
+}
+let YAYIN = { tag: 'v0.0.1', exe: Buffer.alloc(0), sig: {} };
+function yayinla(kip) {
+  const yeni = fs.readFileSync(EXE999);
+  if (kip === 'ayni') YAYIN = { tag: 'v' + SURUM, exe: yeni, sig: imzala(SURUM, yeni) };
+  else if (kip === 'yabanci-anahtar') YAYIN = { tag: 'v9.9.9', exe: yeni, sig: imzala('9.9.9', yeni, crypto.generateKeyPairSync('ed25519').privateKey) };
+  else if (kip === 'yeniden-etiket') YAYIN = { tag: 'v9.9.9', exe: yeni, sig: { ...imzala('1.0.0', yeni), version: '9.9.9' } };
+  else if (kip === 'eski-imza') YAYIN = { tag: 'v9.9.9', exe: yeni, sig: imzala('1.0.0', yeni) };
+  else if (kip === 'bozuk-dosya') { const b = Buffer.from(yeni); b[b.length >> 1] ^= 0xff; YAYIN = { tag: 'v9.9.9', exe: b, sig: imzala('9.9.9', yeni) }; }
+  else if (kip === 'iyi') YAYIN = { tag: 'v9.9.9', exe: yeni, sig: imzala('9.9.9', yeni) };
+  else throw new Error('bilinmeyen yayın: ' + kip);
+}
+function yayinYanit(ad, res) {
+  const adres = (n) => `http://127.0.0.1:${PORT}/guncelleme/${n}`;
+  const sig = Buffer.from(JSON.stringify(YAYIN.sig));
+  if (ad === 'latest') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ tag_name: YAYIN.tag, html_url: 'https://github.com/saffetcelik/hukukfix-indirme-yoneticisi/releases/tag/' + YAYIN.tag, draft: false, prerelease: false,
+      assets: [{ name: 'HukukFixDM.exe', size: YAYIN.exe.length, browser_download_url: adres('HukukFixDM.exe') }, { name: 'HukukFixDM.exe.sig', size: sig.length, browser_download_url: adres('HukukFixDM.exe.sig') }] }));
+  }
+  const veri = ad === 'HukukFixDM.exe' ? YAYIN.exe : ad === 'HukukFixDM.exe.sig' ? sig : null;
+  if (!veri) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'Content-Length': veri.length, 'Content-Type': 'application/octet-stream' });
+  res.end(veri);
+}
 
 // ---------- test sunucusu ----------
 // /hizli/<ad>?boy=N  Range destekli, hızlı · /yavas/<ad>?boy=N  bağlantı başına ~400 KB/s · /tek/<ad>?boy=N  Range yok
@@ -29,6 +72,7 @@ const sonuc = (ad, ok, ayrinti = '') => { if (ok) { gecen++; console.log(`  ✓ 
 const bayt = (bas, n) => { const b = Buffer.alloc(n); for (let i = 0; i < n; i++) b[i] = ((bas + i) * 31 + 7) & 255; return b; };
 const sunucu = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x'); const [, tur, ad] = u.pathname.split('/'); const boy = +(u.searchParams.get('boy') || 0);
+  if (tur === 'guncelleme') return yayinYanit(ad, res);
   if (tur === 'yok' || !boy) { res.writeHead(404); return res.end(); }
   const range = tur !== 'tek' && /bytes=(\d+)-(\d*)/.exec(req.headers.range || '');
   const bas = range ? +range[1] : 0, son = range && range[2] ? Math.min(+range[2], boy - 1) : boy - 1;
@@ -53,30 +97,49 @@ const url = (tur, ad, boy) => `http://127.0.0.1:${PORT}/${tur}/${ad}?boy=${boy}`
 const dogruMu = (dosya, boy) => { if (!fs.existsSync(dosya)) return 'dosya yok'; const b = fs.readFileSync(dosya); if (b.length !== boy) return `boy ${b.length} ≠ ${boy}`; return crypto.createHash('sha1').update(b).digest('hex') === crypto.createHash('sha1').update(bayt(0, boy)).digest('hex') ? '' : 'içerik farklı'; };
 
 // ---------- program ve test kancası ----------
-let app = null;
+const ORTAM = { ...process.env, LOCALAPPDATA: VERI, HFDM_E2E_PORT: String(KANCA), HFDM_SHORTCUT_DIR: KISAYOL,
+  HFDM_UPDATE_URL: `http://127.0.0.1:${PORT}/guncelleme/latest`, HFDM_UPDATE_PUBKEY: PUB };
+let pid = 0, kurucu = null; // pid: pencereyi açan (kurulu) program; kurucu: testin başlattığı, kendini kurup devreden exe
+const calisiyor = (p) => { if (!p) return false; try { process.kill(p, 0); return true; } catch { return false; } };
+const kopruPid = () => { try { return JSON.parse(fs.readFileSync(path.join(KURULU, 'bridge.json'), 'utf8')).pid; } catch { return 0; } };
 function ayarYaz(ek = {}) {
   fs.mkdirSync(path.join(VERI, 'HukukFixDM'), { recursive: true }); fs.mkdirSync(INDIR, { recursive: true });
+  for (const k of ['Masaustu', 'Programlar']) fs.mkdirSync(path.join(KISAYOL, k), { recursive: true }); // gerçek masaüstü ve Başlat menüsü gibi hep var
   const s = { downloadDir: INDIR, categoryFolders: false, maxConnections: 8, maxActive: 3, speedLimitKB: 0, capture: true, captureExts: ['zip', 'bin'], captureMinKB: 0,
-    showOnCapture: false, notify: false, autostart: false, language: 'tr', theme: 'light', ...ek };
+    showOnCapture: false, notify: false, autostart: false, language: 'tr', theme: 'light', autoUpdate: false, ...ek };
   fs.writeFileSync(path.join(VERI, 'HukukFixDM', 'settings.json'), JSON.stringify(s));
 }
-async function ac() {
-  app = spawn(EXE, [], { env: { ...process.env, LOCALAPPDATA: VERI, HFDM_E2E_PORT: String(KANCA) }, stdio: 'ignore' });
+// hazirBekle: bridge.json'a yeni bir program yazılana ve penceresi test kancasına yanıt verene kadar bekler.
+async function hazirBekle(eski = 0) {
   let hazir = false;
-  for (let i = 0; i < 120 && !hazir; i++) { await bekle(250); try { hazir = await js(`!!(window.go && document.querySelector('#list') && typeof render === 'function' && Object.keys(settings).length)`); } catch {} }
+  for (let i = 0; i < 160 && !hazir; i++) {
+    await bekle(250);
+    const p = kopruPid();
+    if (!p || p === eski || !calisiyor(p)) continue;
+    // Kısa bekleme: sayfa henüz yüklenmediyse yanıt gelmez; 20 sn beklemek yerine hemen yeniden dene.
+    try { hazir = await js(`!!(window.go && document.querySelector('#list') && typeof render === 'function' && Object.keys(settings).length)`, 1500); } catch {}
+    if (hazir) pid = p;
+  }
   if (!hazir) throw new Error('program açılmadı ya da test kancası yanıt vermedi');
+}
+// ac: kullanıcının indirdiği exe'yi çalıştırması gibi: test exe'si kendini kurar (ya da kurulu kopyayı bulur) ve ona devreder.
+async function ac() {
+  const eski = pid;
+  kurucu = spawn(EXE, [], { env: ORTAM, stdio: 'ignore' });
+  await hazirBekle(eski);
   await bekle(600);
 }
-async function js(ifade) {
-  const r = await fetch(`http://127.0.0.1:${KANCA}/js`, { method: 'POST', body: ifade, signal: AbortSignal.timeout(25000) });
+async function js(ifade, sure = 20000) {
+  const r = await fetch(`http://127.0.0.1:${KANCA}/js?t=${sure}`, { method: 'POST', body: ifade, signal: AbortSignal.timeout(sure + 5000) });
   if (!r.ok) throw new Error(`kanca ${r.status}`);
   const d = await r.json(); if (d.e) throw new Error(d.e); return d.v;
 }
 async function kapat() {
+  const p = pid;
   js(`window.go.main.App.Quit()`).catch(() => {});
-  for (let i = 0; i < 60 && app.exitCode === null; i++) await bekle(250);
-  if (app.exitCode === null) app.kill();
-  await bekle(500);
+  await bekleKosul(() => !calisiyor(p), 15000);
+  if (calisiyor(p)) try { process.kill(p); } catch {}
+  await bekle(800);
 }
 // pencereden okumalar
 const satirlar = () => js(`[...document.querySelectorAll('#list .row')].map(r => ({ id: r.dataset.id, ad: r.querySelector('.name').textContent, durum: r.dataset.state, meta: r.querySelector('.meta').textContent }))`);
@@ -96,7 +159,8 @@ async function ekle(urller) {
 const diskte = (ad) => fs.existsSync(path.join(INDIR, ad));
 // Tarayıcı uzantısının yolu: uzantı → HukukFixDM-host.exe (native messaging: 4 bayt uzunluk + JSON) → programın köprüsü.
 async function host(mesajlar) {
-  const p = spawn(HOST, ['chrome-extension://e2e/'], { env: { ...process.env, LOCALAPPDATA: VERI }, stdio: ['pipe', 'pipe', 'ignore'] });
+  // ORTAM: host programı başlatırsa (connect) program da test ortamıyla (veri klasörü, test kancası) açılsın.
+  const p = spawn(HOST, ['chrome-extension://e2e/'], { env: ORTAM, stdio: ['pipe', 'pipe', 'ignore'] });
   const parca = []; p.stdout.on('data', (d) => parca.push(d));
   for (const m of mesajlar) { const b = Buffer.from(JSON.stringify(m)); const h = Buffer.alloc(4); h.writeUInt32LE(b.length); p.stdin.write(Buffer.concat([h, b])); }
   p.stdin.end(); await new Promise((r) => p.on('exit', r));
@@ -107,10 +171,39 @@ async function host(mesajlar) {
 const toastVar = (metin) => js(`[...document.querySelectorAll('#toasts .toast')].some(t => t.textContent === ${JSON.stringify(metin)})`);
 
 const parcaVar = (ad) => fs.readdirSync(INDIR).some((f) => f.startsWith(ad) && f.endsWith('.hfdm'));
+// kurulum ve Windows tarafı
+const ayni = (a, b) => !!a && !!b && path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+const esit = (a, b) => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch { return false; } };
+const ps = (komut, ek = {}) => { try { return execFileSync('powershell', ['-NoProfile', '-Command', komut], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, ...ek } }).trim(); } catch { return ''; } };
+const surecYolu = (p) => ps(`(Get-Process -Id ${p}).Path`);
+const regOku = (anahtar, ad) => { try { const o = execFileSync('reg', ['query', anahtar, ...(ad ? ['/v', ad] : ['/ve'])], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); const m = /REG_\w+\s+(.*)$/m.exec(o); return m ? m[1].trim() : null; } catch { return null; } };
+const kisayollar = (klasor) => { try { return fs.readdirSync(path.join(KISAYOL, klasor)).filter((f) => f.endsWith('.lnk')).map((f) => path.join(KISAYOL, klasor, f)); } catch { return []; } };
+const kisayolHedef = (lnk) => ps('(New-Object -ComObject WScript.Shell).CreateShortcut($env:HFDM_LNK).TargetPath', { HFDM_LNK: lnk });
+const surumYazisi = () => js(`document.querySelector('#about-version').textContent`);
+const guncDurum = () => js(`({ s: upd.state, v: upd.version || '', e: upd.error || '', serit: !document.querySelector('#update-bar').hidden, yazi: document.querySelector('#update-status').textContent })`);
+const bekleyenGuncelleme = () => fs.existsSync(path.join(KURULU, 'update'));
+const kaldirmaKomutu = () => { const u = regOku(KALDIR, 'UninstallString') || ''; return u.endsWith('" --uninstall') ? u.slice(1, u.indexOf('"', 1)) : ''; };
 
 // ---------- testler ----------
 async function testler() {
   const K = 1024, MB = 1024 * 1024;
+  console.log('Kurulum (tek exe kendini kurar)');
+  sonuc('indirilen exe kurulu kopyayı başlatıp kapandı', await bekleKosul(() => kurucu.exitCode === 0, 10000), String(kurucu.exitCode));
+  sonuc('program %LOCALAPPDATA%\\HukukFixDM içine kuruldu', esit(KURULU_EXE, EXE));
+  sonuc('açık olan program kurulu kopya', ayni(surecYolu(pid), KURULU_EXE), surecYolu(pid));
+  sonuc('gömülü tarayıcı köprüsü (HukukFixDM-host.exe) yanına çıkarıldı', esit(HOST, HOST_YAPI));
+  const nh = JSON.parse(fs.readFileSync(path.join(KURULU, 'native-host.json'), 'utf8'));
+  sonuc('köprü tanımı çıkarılan host\'u gösteriyor', ayni(nh.path, HOST), nh.path);
+  sonuc('Chrome kaydı köprü tanımını gösteriyor', ayni(regOku(NMH_CHROME), path.join(KURULU, 'native-host.json')), regOku(NMH_CHROME));
+  for (const [ad, klasor] of [['masaüstü', 'Masaustu'], ['Başlat menüsü', 'Programlar']]) {
+    const k = kisayollar(klasor);
+    sonuc(`${ad} kısayolu oluştu`, k.length === 1, JSON.stringify(k));
+    sonuc(`${ad} kısayolu kurulu programı açıyor`, k.length === 1 && ayni(kisayolHedef(k[0]), KURULU_EXE), k[0] && kisayolHedef(k[0]));
+  }
+  sonuc('"Yüklü uygulamalar" kaydı (sürüm ve Kaldır komutu)', regOku(KALDIR, 'DisplayVersion') === SURUM && ayni(kaldirmaKomutu(), KURULU_EXE), `${regOku(KALDIR, 'DisplayVersion')} ${regOku(KALDIR, 'UninstallString')}`);
+  sonuc('install.json kurulu sürümü yazıyor', JSON.parse(fs.readFileSync(path.join(KURULU, 'install.json'), 'utf8')).version === SURUM);
+  sonuc('ayarlarda sürüm ve "Güncellemeleri denetle"', (await surumYazisi()) === SURUM && await js(`!document.querySelector('#update-check').hidden && document.querySelector('#update-bar').hidden`));
+
   console.log('Ekleme ve tamamlanma');
   await ekle([url('hizli', 'a.bin', 3 * MB + 123), url('hizli', 'b.bin', 777 * K), url('tek', 'c.bin', 2 * MB + 5), url('yavas', 'd.bin', 120 * MB)]);
   sonuc('4 bağlantı eklenince 4 satır', (await satirlar()).length === 4, JSON.stringify(await satirlar()));
@@ -187,7 +280,11 @@ async function testler() {
 
   console.log('Kalıcılık: kapat, aç, kaldığı yerden sürdür');
   await satirDugme('d.bin', 'pause'); await bekleKosul(async () => (await satir('d.bin'))?.durum === 'paused', 4000);
+  for (const k of kisayollar('Masaustu')) fs.rmSync(k);
+  const kuruluZaman = fs.statSync(KURULU_EXE).mtimeMs;
   await kapat(); await ac();
+  sonuc('indirilen exe yeniden çalışınca kurulu kopyayı açtı (aynı sürüm yeniden kopyalanmadı)', ayni(surecYolu(pid), KURULU_EXE) && fs.statSync(KURULU_EXE).mtimeMs === kuruluZaman);
+  sonuc('silinen masaüstü kısayolu yeniden oluştu', kisayollar('Masaustu').length === 1);
   sonuc('yeniden açılınca duraklatılmış indirme duruyor', (await satir('d.bin'))?.durum === 'paused', JSON.stringify(await satirlar()));
   await js(`window.go.main.App.SaveSettings({ ...settings, maxConnections: 16 })`); // hızlı bitmesi için hız sınırı yok, bağlantı çok
   sonuc('sürdür (yeniden açılıştan sonra)', await satirDugme('d.bin', 'resume'));
@@ -294,6 +391,83 @@ async function testler() {
   const ayar2 = JSON.parse(fs.readFileSync(path.join(VERI, 'HukukFixDM', 'settings.json'), 'utf8'));
   sonuc('tema ve dil diske yazıldı', ayar2.theme === 'light' && ayar2.language === 'tr', JSON.stringify({ theme: ayar2.theme, language: ayar2.language }));
   await js(`document.querySelector('#dlg-settings [data-close]')?.click()`);
+
+  console.log('Tarayıcı kapalı programı başlatır');
+  await kapat();
+  const [baglan] = await host([{ action: 'connect' }]);
+  sonuc('uzantı kapalı programı başlattı', baglan?.ok === true, JSON.stringify(baglan));
+  await hazirBekle(); await bekle(600);
+  sonuc('köprünün başlattığı program kurulu kopya', ayni(surecYolu(pid), KURULU_EXE), surecYolu(pid));
+  await js(`window.runtime.WindowShow()`); await bekle(400);
+
+  console.log('Otomatik güncelleme (imza denetimi)');
+  await tikla('#btn-settings'); await bekle(300);
+  yayinla('ayni');
+  await tikla('#update-check');
+  sonuc('yayındaki sürüm aynıyken "Güncel"', await bekleKosul(async () => (await guncDurum()).s === 'latest', 15000), JSON.stringify(await guncDurum()));
+  sonuc('ayarlarda "Güncel" yazıyor', (await guncDurum()).yazi === 'Güncel', JSON.stringify(await guncDurum()));
+  for (const [kip, ad, hata] of [
+    ['yabanci-anahtar', 'başka bir anahtarla imzalanmış sürüm reddedildi', 'signature'],
+    ['yeniden-etiket', 'imzası bozulmadan sürüm numarası değiştirilmiş paket reddedildi', 'signature'],
+    ['eski-imza', 'eski bir sürümün gerçek imzası yeni sürüm diye sunulunca reddedildi', 'signature'],
+    ['bozuk-dosya', 'imzalandıktan sonra değiştirilmiş exe reddedildi', 'mismatch'],
+  ]) {
+    yayinla(kip);
+    await tikla('#update-check');
+    const ok = await bekleKosul(async () => (await guncDurum()).s === 'error', 20000);
+    const d = await guncDurum();
+    sonuc(ad, ok && d.e === hata && !d.serit && !bekleyenGuncelleme(), JSON.stringify(d));
+  }
+  sonuc('reddedilince "doğrulanamadı, kurulmadı" uyarısı', (await guncDurum()).yazi === 'Güncelleme doğrulanamadı, kurulmadı', JSON.stringify(await guncDurum()));
+  sonuc('reddedilen sürümler kurulu exe\'ye dokunmadı', esit(KURULU_EXE, EXE));
+
+  yayinla('iyi');
+  await js(`(() => { const e = document.querySelector('[data-set="autoUpdate"]'); e.checked = true; e.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  sonuc('"Otomatik güncelle" açılınca yeni sürüm indirildi', await bekleKosul(async () => (await guncDurum()).s === 'ready', 40000), JSON.stringify(await guncDurum()));
+  sonuc('indirilen dosya imzalı sürümün aynısı', esit(path.join(KURULU, 'update', 'HukukFixDM.exe'), EXE999));
+  await js(`document.querySelector('#dlg-settings [data-close]')?.click()`); await bekle(300);
+  sonuc('pencerede "Yeni sürüm hazır: 9.9.9" şeridi', await js(`!document.querySelector('#update-bar').hidden && document.querySelector('#update-text').textContent === 'Yeni sürüm hazır: 9.9.9'`));
+  const satirOnce = (await satirlar()).length, eskiPid = pid;
+  await tikla('#update-apply');
+  sonuc('"Yeniden başlat" eski sürümü kapattı', await bekleKosul(() => !calisiyor(eskiPid), 20000));
+  await hazirBekle(eskiPid);
+  sonuc('"9.9.9 sürümüne güncellendi" bildirimi', await bekleKosul(() => toastVar('9.9.9 sürümüne güncellendi'), 2500));
+  sonuc('yeni sürüm açıldı (9.9.9)', (await surumYazisi()) === '9.9.9');
+  sonuc('kurulu exe yeni sürümle değişti', esit(KURULU_EXE, EXE999));
+  sonuc('install.json ve "Yüklü uygulamalar" 9.9.9', JSON.parse(fs.readFileSync(path.join(KURULU, 'install.json'), 'utf8')).version === '9.9.9' && regOku(KALDIR, 'DisplayVersion') === '9.9.9');
+  sonuc('güncelleme klasörü ve eski exe temizlendi', await bekleKosul(() => !bekleyenGuncelleme() && !fs.readdirSync(KURULU).some((f) => f.endsWith('.old')), 5000), fs.readdirSync(KURULU).join(', '));
+  sonuc('indirme listesi güncellemeden sonra yerinde', (await satirlar()).length === satirOnce);
+  sonuc('yeni sürüm şerit göstermiyor', await js(`document.querySelector('#update-bar').hidden`));
+
+  console.log('Kaldırma (Yüklü uygulamalar → Kaldır)');
+  const dosyalar = JSON.stringify(fs.readdirSync(INDIR).sort());
+  const kaldirici = spawn(KURULU_EXE, ['--uninstall', '--yes'], { env: ORTAM, stdio: 'ignore' });
+  const kod = await new Promise((r) => kaldirici.on('exit', r));
+  sonuc('kaldırma komutu bitti', kod === 0, String(kod));
+  sonuc('açık program kapatıldı', !calisiyor(pid));
+  sonuc('kısayollar silindi', kisayollar('Masaustu').length === 0 && kisayollar('Programlar').length === 0);
+  sonuc('"Yüklü uygulamalar" kaydı silindi', regOku(KALDIR, 'DisplayVersion') === null);
+  sonuc('tarayıcı köprüsü kaydı silindi', regOku(NMH_CHROME) === null);
+  sonuc('program klasörü tümüyle silindi', await bekleKosul(() => !fs.existsSync(KURULU), 20000), fs.existsSync(KURULU) ? fs.readdirSync(KURULU).join(', ') : '');
+  sonuc('indirilen dosyalara dokunulmadı', JSON.stringify(fs.readdirSync(INDIR).sort()) === dosyalar);
+  pid = 0;
+
+  console.log('Yeniden kurulum ve açılışta güncelleme');
+  ayarYaz();
+  await ac();
+  sonuc('yeniden kuruldu (' + SURUM + ')', esit(KURULU_EXE, EXE) && (await surumYazisi()) === SURUM);
+  sonuc('kısayollar geri geldi', kisayollar('Masaustu').length === 1 && kisayollar('Programlar').length === 1);
+  await tikla('#btn-settings'); await bekle(300);
+  await tikla('#update-check');
+  sonuc('"Güncellemeleri denetle" yeni sürümü indirdi', await bekleKosul(async () => (await guncDurum()).s === 'ready', 40000), JSON.stringify(await guncDurum()));
+  sonuc('ayarlarda "9.9.9 hazır" ve "Yeniden başlat"', (await guncDurum()).yazi === '9.9.9 hazır' && await js(`!document.querySelector('#update-apply2').hidden && document.querySelector('#update-check').hidden`));
+  await js(`document.querySelector('#dlg-settings [data-close]')?.click()`);
+  await kapat();
+  sonuc('kapanınca güncelleme kurulmayı bekliyor', bekleyenGuncelleme() && esit(KURULU_EXE, EXE));
+  await ac();
+  sonuc('açılışta güncelleme kuruldu (9.9.9)', (await surumYazisi()) === '9.9.9' && esit(KURULU_EXE, EXE999));
+  sonuc('açılışta kurulunca da "9.9.9 sürümüne güncellendi" bildirimi', await bekleKosul(() => toastVar('9.9.9 sürümüne güncellendi'), 2500));
+  sonuc('bekleyen güncelleme temizlendi', !bekleyenGuncelleme());
 }
 
 // ---------- çalıştır ----------
@@ -301,7 +475,7 @@ await new Promise((r) => sunucu.listen(PORT, '127.0.0.1', r));
 console.log(`Geçici klasör: ${GECICI}`);
 ayarYaz();
 try { await ac(); await testler(); } catch (e) { kalan++; hatalar.push('beklenmeyen hata: ' + e.message); console.log('  ✗ beklenmeyen hata', e.stack); }
-finally { if (app && app.exitCode === null) await kapat(); sunucu.close(); }
+finally { if (calisiyor(pid)) await kapat(); sunucu.close(); }
 console.log(`\n${gecen} geçti, ${kalan} kaldı${hatalar.length ? '\nKalanlar: ' + hatalar.join(' · ') : ''}`);
 if (!process.env.HFDM_TUT) fs.rmSync(GECICI, { recursive: true, force: true });
 process.exit(kalan ? 1 : 0);

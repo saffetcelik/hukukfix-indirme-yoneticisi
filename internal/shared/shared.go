@@ -14,8 +14,6 @@ const (
 	AppName   = "HukukFix İndirme Yöneticisi"
 	AppNameEN = "HukukFix Download Manager"
 
-	Version = "1.1.2"
-
 	// NativeHostName is the name browsers use to find the native messaging host.
 	NativeHostName = "com.hukukfix.downloadmanager"
 
@@ -25,6 +23,10 @@ const (
 	AppExe  = "HukukFixDM.exe"
 	HostExe = "HukukFixDM-host.exe"
 )
+
+// Version is a variable only so the test build can pose as a newer release
+// (-ldflags "-X hukukfixdm/internal/shared.Version=9.9.9"). Keep wails.json productVersion in step.
+var Version = "1.2.0"
 
 // DataDir is where settings, the download list and the bridge file live.
 func DataDir() string {

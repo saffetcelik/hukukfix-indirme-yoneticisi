@@ -112,8 +112,9 @@ type Settings struct {
 	ShowOnCapture   bool     `json:"showOnCapture"`
 	Notify          bool     `json:"notify"`
 	Autostart       bool     `json:"autostart"`
-	Language        string   `json:"language"` // "auto", "tr", "en"
-	Theme           string   `json:"theme"`    // "system", "light", "dark"
+	Language        string   `json:"language"`   // "auto", "tr", "en"
+	Theme           string   `json:"theme"`      // "system", "light", "dark"
+	AutoUpdate      bool     `json:"autoUpdate"` // check GitHub for signed new versions
 }
 
 // DefaultCaptureExts are the file types taken over from the browser by default.
@@ -137,6 +138,7 @@ func defaultSettings() Settings {
 		Notify:         true,
 		Language:       "auto",
 		Theme:          "system",
+		AutoUpdate:     true,
 	}
 }
 

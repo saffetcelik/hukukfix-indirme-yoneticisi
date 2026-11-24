@@ -129,6 +129,9 @@ func loadProxy() proxyConfig {
 	return c
 }
 
+// SystemProxy is the proxy choice downloads use, for other HTTP clients of the app (the updater).
+func SystemProxy(req *http.Request) (*url.URL, error) { return systemProxy(req) }
+
 // systemProxy honours HTTP(S)_PROXY first and falls back to the Windows
 // per-user proxy configuration.
 func systemProxy(req *http.Request) (*url.URL, error) {
