@@ -257,6 +257,29 @@ async function testler() {
   sonuc('diskten silinmiş dosyayı açınca uyarı çıktı', await bekleKosul(() => toastVar('Dosya bulunamadı; taşınmış ya da silinmiş olabilir.'), 3000));
   await satirDugme('m.bin', 'remove');
 
+  console.log('Ayarlar penceresi kaydırma');
+  // Ayarlar penceresi ekrana sığmalı, içerik kendi içinde sonuna kadar kaymalı (en alttaki sürüm satırı görünür olmalı).
+  const ayarOlc = () => js(`(() => { const d = document.querySelector('#dlg-settings .dialog'), s = document.querySelector('#dlg-settings .settings'); const r = d.getBoundingClientRect();
+    s.scrollTop = s.scrollHeight; const k = s.getBoundingClientRect(), e = s.querySelector('.about').getBoundingClientRect();
+    const o = { pencere: innerWidth + 'x' + innerHeight, ust: Math.round(r.top), alt: Math.round(r.bottom), icerik: s.scrollHeight, gorunen: s.clientHeight, kaydi: s.scrollTop,
+      surumGorunur: e.top >= k.top - 1 && e.bottom <= Math.min(k.bottom, innerHeight) + 1 }; s.scrollTop = 0; return o; })()`);
+  const pencereBoyu = (w, h) => js(`(async () => { window.runtime.WindowSetSize(${w}, ${h}); await new Promise(r => setTimeout(r, 700)); return innerWidth + 'x' + innerHeight; })()`);
+  await tikla('#btn-settings'); await bekle(400);
+  for (const [w, h, ad] of [[980, 660, 'normal boyut'], [620, 420, 'en küçük pencere']]) {
+    await pencereBoyu(w, h);
+    const o = await ayarOlc();
+    sonuc(`ayarlar penceresi ekrana sığıyor (${ad})`, o.ust >= 0 && o.alt <= +o.pencere.split('x')[1], JSON.stringify(o));
+    sonuc(`ayarlar sonuna kadar kayıyor (${ad})`, o.surumGorunur && (o.icerik <= o.gorunen || o.kaydi > 0), JSON.stringify(o));
+  }
+  await js(`document.querySelector('#dlg-settings [data-close]')?.click()`);
+  // Öteki pencereler de en küçük boyutta düğmeleriyle birlikte ekranda kalmalı.
+  await pencereBoyu(620, 420);
+  await tikla('#btn-add'); await bekle(400);
+  const ekleOlcu = await js(`(() => { const a = document.querySelector('#dlg-add .dialog-actions').getBoundingClientRect(); return { alt: Math.round(a.bottom), pencere: innerHeight }; })()`);
+  sonuc('ekleme penceresinin düğmeleri en küçük pencerede görünüyor', ekleOlcu.alt <= ekleOlcu.pencere, JSON.stringify(ekleOlcu));
+  await js(`document.querySelector('#dlg-add [data-close]')?.click()`);
+  await pencereBoyu(980, 660);
+
   console.log('Tema ve dil');
   const ayarSec = (k, v) => js(`(() => { const e = document.querySelector('[data-set="${k}"]'); e.value = ${JSON.stringify(v)}; e.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   await tikla('#btn-settings'); await bekle(300);
