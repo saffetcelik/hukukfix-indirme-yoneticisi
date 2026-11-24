@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header>
+  <img src="icons/icon32.png" width="20" height="20" alt="">
+  <b>HukukFix</b>
+  <span id="state" class="state"><i class="dot"></i><span></span></span>
+  <label class="toggle" id="capture-label"><input type="checkbox" id="capture"><span></span></label>
+</header>
+
+<section id="offline" hidden>
+  <p id="offline-text"></p>
+  <button id="start" class="primary"></button>
+  <p id="offline-error" class="hint"></p>
+</section>
+
+<section id="media-box" hidden>
+  <h4 id="media-title"></h4>
+  <div id="media"></div>
+</section>
+
+<section id="list-box" hidden>
+  <h4 id="list-title"></h4>
+  <div id="list"></div>
+  <p id="empty" class="hint" hidden></p>
+</section>
+
+<footer id="footer" hidden><button id="open" class="link"></button></footer>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HukukFix İndirme Yöneticisi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="toolbar">
+  <button id="btn-add" class="btn primary">
+    <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg><span data-t="newDownload"></span>
+  </button>
+  <label class="search">
+    <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+    <input id="search" type="search" spellcheck="false" autocomplete="off" data-tp="search">
+  </label>
+  <div class="spacer"></div>
+  <button id="btn-resume-all" class="btn icon" data-tt="resumeAll"><svg viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z"/></svg></button>
+  <button id="btn-pause-all" class="btn icon" data-tt="pauseAll"><svg viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg></button>
+  <span class="sep"></span>
+  <button id="btn-folder" class="btn icon" data-tt="openFolder"><svg viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg></button>
+  <button id="btn-settings" class="btn icon" data-tt="settings"><svg viewBox="0 0 16 16"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg></button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-filter="all" class="on"><span data-t="tabAll"></span><b id="n-all">0</b></button>
+  <button data-filter="active"><span data-t="tabActive"></span><b id="n-active">0</b></button>
+  <button data-filter="done"><span data-t="tabDone"></span><b id="n-done">0</b></button>
+  <div class="spacer"></div>
+  <button id="btn-clear" class="link" data-t="clearDone"></button>
+</nav>
+
+<main id="list" tabindex="-1"></main>
+
+<section id="empty" class="empty" hidden>
+  <div class="empty-art"><svg viewBox="0 0 48 48"><path d="M24 8v22M15 22l9 9 9-9M11 39h26"/></svg></div>
+  <h2 id="empty-title"></h2>
+  <p id="empty-text"></p>
+</section>
+
+<footer class="status">
+  <span id="st-speed" class="st-speed"></span>
+  <span id="st-active"></span>
+  <div class="spacer"></div>
+  <button id="st-limit" class="chip" hidden></button>
+  <button id="st-ext" class="chip"><i class="dot"></i><span></span></button>
+</footer>
+
+<!-- Add download -->
+<div class="overlay" id="dlg-add" hidden>
+  <div class="dialog" role="dialog" aria-modal="true">
+    <h3 data-t="newDownload"></h3>
+    <textarea id="add-urls" rows="3" spellcheck="false" data-tp="addPlaceholder"></textarea>
+    <div class="field-row">
+      <svg viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg>
+      <span id="add-dir" class="path"></span>
+      <button id="add-dir-btn" class="link" data-t="change"></button>
+    </div>
+    <p id="add-error" class="error" hidden></p>
+    <div class="dialog-actions">
+      <button class="btn" data-close data-t="cancel"></button>
+      <button id="add-ok" class="btn primary" data-t="download"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm -->
+<div class="overlay" id="dlg-confirm" hidden>
+  <div class="dialog small" role="alertdialog" aria-modal="true">
+    <h3 id="confirm-title"></h3>
+    <p id="confirm-text" class="muted"></p>
+    <div class="dialog-actions">
+      <button class="btn" data-close data-t="cancel"></button>
+      <button id="confirm-ok" class="btn danger"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="overlay" id="dlg-settings" hidden>
+  <div class="dialog wide" role="dialog" aria-modal="true">
+    <div class="dialog-head">
+      <h3 data-t="settings"></h3>
+      <button class="btn icon" data-close><svg viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+    </div>
+    <div class="settings">
+      <h4 data-t="secGeneral"></h4>
+      <div class="set">
+        <div><label data-t="setFolder"></label><small id="set-dir" class="path"></small></div>
+        <button id="set-dir-btn" class="btn" data-t="change"></button>
+      </div>
+      <div class="set">
+        <div><label data-t="setCategories"></label><small data-t="setCategoriesHint"></small></div>
+        <input type="checkbox" class="switch" data-set="categoryFolders">
+      </div>
+      <div class="set">
+        <div><label data-t="setAutostart"></label><small data-t="setAutostartHint"></small></div>
+        <input type="checkbox" class="switch" data-set="autostart">
+      </div>
+      <div class="set">
+        <div><label data-t="setNotify"></label></div>
+        <input type="checkbox" class="switch" data-set="notify">
+      </div>
+      <div class="set">
+        <div><label data-t="setLanguage"></label></div>
+        <select data-set="language"><option value="auto" data-t="optAuto"></option><option value="tr">Türkçe</option><option value="en">English</option></select>
+      </div>
+      <div class="set">
+        <div><label data-t="setTheme"></label></div>
+        <select data-set="theme"><option value="system" data-t="optSystem"></option><option value="light" data-t="optLight"></option><option value="dark" data-t="optDark"></option></select>
+      </div>
+
+      <h4 data-t="secSpeed"></h4>
+      <div class="set">
+        <div><label data-t="setConns"></label><small data-t="setConnsHint"></small></div>
+        <div class="range"><input type="range" min="1" max="32" data-set="maxConnections"><output></output></div>
+      </div>
+      <div class="set">
+        <div><label data-t="setActive"></label></div>
+        <div class="range"><input type="range" min="1" max="10" data-set="maxActive"><output></output></div>
+      </div>
+      <div class="set">
+        <div><label data-t="setLimit"></label><small data-t="setLimitHint"></small></div>
+        <div class="unit"><input type="number" min="0" step="100" data-set="speedLimitKB"><span>KB/s</span></div>
+      </div>
+
+      <h4 data-t="secBrowser"></h4>
+      <div class="set">
+        <div><label data-t="setCapture"></label><small data-t="setCaptureHint"></small></div>
+        <input type="checkbox" class="switch" data-set="capture">
+      </div>
+      <div class="set">
+        <div><label data-t="setShowOnCapture"></label></div>
+        <input type="checkbox" class="switch" data-set="showOnCapture">
+      </div>
+      <div class="set">
+        <div><label data-t="setMinSize"></label><small data-t="setMinSizeHint"></small></div>
+        <div class="unit"><input type="number" min="0" step="100" data-set="captureMinKB"><span>KB</span></div>
+      </div>
+      <div class="set col">
+        <div class="set-head"><label data-t="setExts"></label><button id="exts-reset" class="link" data-t="reset"></button></div>
+        <textarea id="set-exts" rows="3" spellcheck="false"></textarea>
+      </div>
+
+      <div class="card" id="ext-card">
+        <div class="card-head"><i class="dot"></i><b id="ext-state"></b></div>
+        <ol class="steps">
+          <li><span data-t="step1"></span><span id="ext-browsers" class="inline-btns"></span></li>
+          <li data-t="step2"></li>
+          <li><span data-t="step3"></span>
+            <div class="pathbox"><code id="ext-dir"></code><button id="ext-copy" class="link" data-t="copy"></button><button id="ext-open" class="link" data-t="openFolderShort"></button></div>
+          </li>
+        </ol>
+        <p id="ext-warn" class="error" hidden data-t="hostMissing"></p>
+      </div>
+
+      <p class="about">HukukFix İndirme Yöneticisi <span id="about-version"></span></p>
+    </div>
+  </div>
+</div>
+
+<div id="menu" class="menu" hidden></div>
+<div id="toasts" class="toasts"></div>
+<div id="drop" class="drop" hidden><div data-t="dropHint"></div></div>
+
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

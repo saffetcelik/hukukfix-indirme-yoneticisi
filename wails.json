@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "HukukFixDM",
+  "outputfilename": "HukukFixDM",
+  "frontend:install": "",
+  "frontend:build": "",
+  "author": {
+    "name": "HukukFix"
+  },
+  "info": {
+    "companyName": "HukukFix",
+    "productName": "HukukFix İndirme Yöneticisi",
+    "productVersion": "1.1.0",
+    "copyright": "MIT License",
+    "comments": "HukukFix Download Manager"
+  }
+}
