@@ -4,7 +4,7 @@ Windows için hızlı, sade, **ücretsiz ve açık kaynak** bir indirme yönetic
 
 > **Claude Fable 5.2 ile geliştirildi.** Bu programın kodu Anthropic'in Claude Fable 5.2 modeliyle yazıldı.
 
-<p align="center"><img src="docs/ekran-goruntusu.png" width="760" alt="HukukFix İndirme Yöneticisi 1.3.0 ana penceresi: iki indirme sekiz bağlantıyla sürüyor, biri duraklatılmış, dördü tamamlanmış"></p>
+<p align="center"><img src="docs/ekran-goruntusu.png" width="760" alt="HukukFix İndirme Yöneticisi 1.3.1 ana penceresi: Ad, Boyut, Durum, Hız ve Tarih sütunlu indirme listesi"></p>
 
 ## İndir
 
@@ -94,6 +94,7 @@ Uçtan uca test, programın test sürümünü (`-tags e2e`, yalnız testte derle
 
 ## Sürüm notları
 
+- **1.3.1** — İndirme listesi başlıklı bir tabloya dönüştü (Ad, Boyut, Durum, Hız, Tarih); her indirme tek satırda. Durum sütunu, yüzdeyi ve kalan süreyi içinde yazan bir ilerleme çubuğu ("%17 · 1 dk 16 sn"). Biten indirmeler "✓ Tamamlandı" diye, hata verenler kısa bir nedenle görünüyor; tam açıklama fareyle üzerine gelince çıkıyor. Dar pencerede Tarih sütunu gizleniyor. Uçtan uca test 149 adım.
 - **1.3.0** — Arayüz sadeleşti ve küçüldü. Pencere 860×560 açılıyor; sekmeler araç çubuğuna taşındı. Her indirme aynı boyda tek satır: solda ad ve durum, sağda kısa ilerleme çubuğu, yüzde ve boyut sütunları; biten indirmede yeşil onay ve tarih. Ayarlar dört sayfaya ayrıldı (Genel, Hız, Tarayıcı, Hakkında). Türkçe arayüzde dosya türü rozetleri "ZİP" yerine "ZIP" yazıyor. Uçtan uca test 146 adım.
 - **1.2.2** — Güncelleme denetimi açılıştan 45 saniye yerine 10 saniye sonra yapılıyor. İnternete ulaşılamadığı ya da indirme yarıda kaldığı için başarısız olan denetim 6 saat yerine 10 dakika sonra yineleniyor. Uçtan uca test 138 adım.
 - **1.2.1** — Pencere başlığında sürüm numarası ("HukukFix İndirme Yöneticisi 1.2.1"). Tarayıcı eklentisi henüz hiç bağlanmamışsa sağ altta eklentinin nasıl ekleneceğini gösteren küçük bir uyarı çıkar; eklenti bir kez bağlanınca bir daha gösterilmez. "Güncellemeleri denetle" sonucunu açıkça gösteriyor: denetlerken dönen bir gösterge, güncelse yeşil onay işareti ve "En güncel sürümü kullanıyorsunuz" bildirimi, denetlenemezse nedeni. Ayarlar'ın altındaki sürüm satırı ayraçlarla düzenlendi. Uçtan uca test açık bir HukukFix varken de çalışıyor; 137 adım.

@@ -148,22 +148,15 @@ function createRow(id) {
   const el = document.createElement('div');
   el.className = 'row';
   el.dataset.id = id;
-  el.innerHTML = '<div class="tile"></div><div class="body"><span class="name"></span><div class="meta"></div></div>' +
-    '<div class="pcol"><div class="prog" hidden></div><span class="pct"></span><span class="st" hidden></span></div><div class="size"></div><div class="acts"></div>';
+  el.innerHTML = '<div class="tile"></div><span class="name"></span><span class="size r"></span>' +
+    '<div class="stat"><div class="pill" hidden><i class="fill"></i><span class="ptext"></span></div><span class="st" hidden></span></div>' +
+    '<span class="speed r"></span><span class="date r c-date"></span><div class="acts"></div>';
   return el;
 }
 
-function progressImage(s) {
-  if (!(s.total > 0)) return '';
-  const segs = s.segments && s.segments.length ? s.segments : [[0, s.total - 1, s.received]];
-  const stops = ['transparent 0'];
-  for (const [a, e, p] of segs) {
-    if (p <= a) continue;
-    const x0 = (a / s.total * 100).toFixed(3), x1 = (Math.min(p, e + 1) / s.total * 100).toFixed(3);
-    stops.push(`transparent ${x0}%`, `var(--accent) ${x0}%`, `var(--accent) ${x1}%`, `transparent ${x1}%`);
-  }
-  return stops.length > 1 ? `linear-gradient(90deg,${stops.join(',')})` : '';
-}
+// Percent the way each language writes it: "%17" in Turkish, "17%" in English.
+const pctText = (n) => (lang === 'tr' ? '%' + n : n + '%');
+const percent = (s) => (s.total > 0 && s.received > 0 ? Math.min(100, Math.floor(s.received / s.total * 100)) : -1);
 
 function actionsFor(s) {
   switch (s.state) {
@@ -174,27 +167,36 @@ function actionsFor(s) {
   }
 }
 
-// The line under the name says what is going on; sizes have their own column.
-function metaHTML(s) {
-  const sep = '<i>·</i>';
+// A short reason for the status column; the full sentence is in the tooltip.
+function errorShort(s) {
+  switch (s.errorCode) {
+    case 'http': return s.errorDetail === '403' ? t('sErr403') : s.errorDetail === '404' ? t('sErr404') : t('sErrHttp', { d: s.errorDetail });
+    case 'network': return t('sErrNet');
+    case 'dns': return t('sErrDns');
+    case 'disk_full': return t('sErrDiskFull');
+    case 'disk': return t('sErrDisk');
+    case 'html_page': return t('sErrHtml');
+    case 'changed': return t('sErrChanged');
+    case 'live': case 'drm': case 'hls': case 'hls_audio': return t('sErrStream');
+    default: return t('stFailed');
+  }
+}
+
+// The status column: a bar with its text inside while there is something to show, a word otherwise.
+// Returns [bar text or null, word class, word, tooltip].
+function statusOf(s) {
+  const p = percent(s), tip = [];
+  if (s.conns > 1) tip.push(t('conns', { n: s.conns }));
+  if (!s.resumable && s.state !== 'completed') tip.push(t('noResume'));
   switch (s.state) {
-    case 'completed':
-      return esc(s.host);
-    case 'failed':
-      return `<span class="s-err">${esc(errorText(s))}</span>`;
-    case 'paused':
-      return t('stPaused');
-    case 'queued':
-      return t('stQueued');
-    case 'connecting':
-      return [t('stConnecting'), esc(s.host)].join(sep);
-    default: {
-      const parts = [`<span class="s-speed">${fmtSpeed(s.speed)}</span>`];
-      if (s.eta >= 0) parts.push(t('left', { t: fmtEta(s.eta) }));
-      if (s.conns > 1) parts.push(t('conns', { n: s.conns }));
-      if (!s.resumable) parts.push(t('noResume'));
-      return parts.join(sep);
-    }
+    case 'completed': return { word: t('stDone'), cls: 'ok', icon: 'check' };
+    case 'failed': return { word: errorShort(s), cls: 'err', tip: errorText(s) };
+    case 'connecting': return { bar: t('stConnecting'), indet: true };
+    case 'paused': return { bar: p >= 0 ? `${t('stPaused')} · ${pctText(p)}` : t('stPaused'), p, tip: tip.join(' · ') };
+    case 'queued': return p >= 0 ? { bar: `${t('stQueued')} · ${pctText(p)}`, p } : { word: t('stQueued'), cls: 'wait' };
+    default:
+      if (p < 0) return { bar: t('stDownloading'), indet: true, tip: tip.join(' · ') };
+      return { bar: s.eta >= 0 ? `${pctText(p)} · ${fmtEta(s.eta)}` : pctText(p), p, tip: [s.eta >= 0 ? t('left', { t: fmtEta(s.eta) }) : '', ...tip].filter(Boolean).join(' · ') };
   }
 }
 
@@ -209,7 +211,7 @@ function sizeText(s) {
 }
 
 function updateRow(el, s) {
-  const sig = [s.state, s.fileName, s.received, s.total, Math.round(s.speed), s.eta, s.conns, s.errorCode, s.segments ? s.segments.length : 0].join('|');
+  const sig = [s.state, s.fileName, s.received, s.total, Math.round(s.speed), s.eta, s.conns, s.errorCode, s.finishedAt, lang].join('|');
   if (el._sig === sig) return;
   el._sig = sig;
   const live = s.state === 'downloading' || s.state === 'connecting';
@@ -223,24 +225,27 @@ function updateRow(el, s) {
   tile.textContent = m ? m[1].slice(0, 4).toLocaleUpperCase('en-US') : '···';
 
   const name = $('.name', el);
-  if (name.textContent !== s.fileName) { name.textContent = s.fileName; name.title = s.fileName; }
+  const when = fmtDate(s.state === 'completed' ? s.finishedAt : s.createdAt);
+  if (name.textContent !== s.fileName) name.textContent = s.fileName;
+  name.title = [s.fileName, s.url, when].filter(Boolean).join('\n');
 
-  const prog = $('.prog', el), st = $('.st', el);
-  const showBar = s.state !== 'completed' && s.state !== 'failed' || (s.state === 'failed' && s.received > 0 && s.total > 0);
-  prog.hidden = !showBar;
-  if (showBar) {
-    const indet = live && !(s.total > 0);
-    prog.classList.toggle('indet', indet);
-    prog.style.backgroundImage = indet ? '' : progressImage(s);
-  }
-  $('.pct', el).textContent = showBar && s.total > 0 && s.received > 0 ? Math.floor(s.received / s.total * 100) + '%' : '';
-  st.hidden = showBar;
-  if (!showBar) {
-    st.className = 'st ' + (s.state === 'completed' ? 'ok' : 'err');
-    st.innerHTML = s.state === 'completed' ? svg('check') + esc(fmtDate(s.finishedAt) || t('stDone')) : esc(t('stFailed'));
+  const st = statusOf(s), pill = $('.pill', el), word = $('.st', el);
+  pill.hidden = st.bar == null;
+  word.hidden = st.bar != null;
+  $('.stat', el).title = st.tip || '';
+  if (st.bar != null) {
+    pill.classList.toggle('indet', !!st.indet);
+    $('.fill', pill).style.width = st.indet ? '' : Math.max(0, st.p) + '%';
+    $('.ptext', pill).textContent = st.bar;
+    word.textContent = '';
+  } else {
+    $('.ptext', pill).textContent = '';
+    word.className = 'st ' + st.cls;
+    word.innerHTML = (st.icon ? svg(st.icon) : '') + esc(st.word);
   }
   $('.size', el).textContent = sizeText(s);
-  $('.meta', el).innerHTML = metaHTML(s);
+  $('.speed', el).textContent = s.state === 'downloading' && s.speed > 0 ? fmtSpeed(s.speed) : '';
+  $('.date', el).textContent = when;
 
   const acts = $('.acts', el);
   if (acts.dataset.for !== s.state + lang) {
@@ -284,6 +289,7 @@ function render() {
 
   const empty = ids.length === 0;
   list.hidden = empty;
+  $('#thead').hidden = empty;
   $('#empty').hidden = !empty;
   if (empty) {
     const kind = query ? 'emptySearch' : filter === 'active' && order.length ? 'emptyActive' : filter === 'done' && order.length ? 'emptyDone' : 'empty';

@@ -145,7 +145,7 @@ async function kapat() {
   await bekle(800);
 }
 // pencereden okumalar
-const satirlar = () => js(`[...document.querySelectorAll('#list .row')].map(r => ({ id: r.dataset.id, ad: r.querySelector('.name').textContent, durum: r.dataset.state, meta: r.querySelector('.meta').textContent + ' | ' + r.querySelector('.size').textContent }))`);
+const satirlar = () => js(`[...document.querySelectorAll('#list .row')].map(r => ({ id: r.dataset.id, ad: r.querySelector('.name').textContent, durum: r.dataset.state, meta: r.querySelector('.stat').textContent + ' | ' + r.querySelector('.size').textContent }))`);
 const satir = async (ad) => (await satirlar()).find((r) => r.ad === ad);
 const tikla = (secici) => js(`(() => { const e = document.querySelector(${JSON.stringify(secici)}); if (!e) return false; e.click(); return true; })()`);
 const satirDugme = (ad, act) => js(`(() => { const r = [...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === ${JSON.stringify(ad)}); const b = r && r.querySelector('[data-act="${act}"]'); if (!b) return false; b.click(); return true; })()`);
@@ -188,6 +188,7 @@ const bekleyenGuncelleme = () => fs.existsSync(path.join(KURULU, 'update'));
 const baslik = () => ps(`(Get-Process -Id ${pid}).MainWindowTitle`); // PowerShell Türkçe harfleri bozabilir: yalnız baş ve sonu karşılaştırılır
 const baslikSurum = async (v) => { let b = ''; await bekleKosul(() => { b = baslik(); return b.startsWith('HukukFix') && b.endsWith(' ' + v); }, 5000); return b; };
 const ipucuAcik = () => js(`!document.querySelector('#ext-hint').hidden`);
+const ipucuNeden = () => js(`({ gizli: document.querySelector('#ext-hint').hidden, hazir: hintReady, kapatildi: hintClosed, kurulu: extInfo.known, bagli: extInfo.connected, dosyalar: null })`).catch((e) => String(e));
 const kaldirmaKomutu = () => { const u = regOku(KALDIR, 'UninstallString') || ''; return u.endsWith('" --uninstall') ? u.slice(1, u.indexOf('"', 1)) : ''; };
 
 // ---------- testler ----------
@@ -209,11 +210,12 @@ async function testler() {
   sonuc('"Yüklü uygulamalar" kaydı (sürüm ve Kaldır komutu)', regOku(KALDIR, 'DisplayVersion') === SURUM && ayni(kaldirmaKomutu(), KURULU_EXE), `${regOku(KALDIR, 'DisplayVersion')} ${regOku(KALDIR, 'UninstallString')}`);
   sonuc('install.json kurulu sürümü yazıyor', JSON.parse(fs.readFileSync(path.join(KURULU, 'install.json'), 'utf8')).version === SURUM);
   { const b = await baslikSurum(SURUM); sonuc(`pencere başlığında sürüm (${SURUM})`, b.startsWith('HukukFix') && b.endsWith(' ' + SURUM), b); }
-  sonuc('eklenti hiç bağlanmamışken sağ altta eklenti uyarısı çıktı', await bekleKosul(ipucuAcik, 4000));
+  sonuc('eklenti hiç bağlanmamışken sağ altta eklenti uyarısı çıktı', await bekleKosul(ipucuAcik, 8000), JSON.stringify(await ipucuNeden())); // ilk açılışta WebView profili kurulurken sayfa geç yüklenebilir
   await tikla('#ext-hint-go'); await bekle(400);
   sonuc('"Nasıl eklenir?" Ayarlar\'ın Tarayıcı sayfasını açtı', await js(`!document.querySelector('#dlg-settings').hidden && !document.querySelector('.pane[data-pane="browser"]').hidden && document.querySelector('#set-tabs [data-pane="browser"]').classList.contains('on') && document.querySelector('#ext-hint').hidden`));
   await js(`document.querySelector('#dlg-settings [data-close]')?.click()`); await bekle(300);
   sonuc('uyarı kapandıktan sonra geri gelmedi', !(await ipucuAcik()));
+  if (process.env.HFDM_E2E_SADECE === 'kurulum') { console.log('  (yalnız kurulum bölümü; dosyalar: ' + fs.readdirSync(KURULU).join(', ') + ')'); return; }
   sonuc('ayarlarda sürüm ve "Güncellemeleri denetle"', (await surumYazisi()) === SURUM && await js(`!document.querySelector('#update-check').hidden && document.querySelector('#update-bar').hidden`));
 
   console.log('Ekleme ve tamamlanma');
@@ -221,12 +223,14 @@ async function testler() {
   sonuc('4 bağlantı eklenince 4 satır', (await satirlar()).length === 4, JSON.stringify(await satirlar()));
   sonuc('hızlı dosyalar tamamlandı', await bekleKosul(async () => (await satir('a.bin'))?.durum === 'completed' && (await satir('b.bin'))?.durum === 'completed'));
   sonuc('dosya türü rozeti Türkçe arayüzde de doğru ("BIN", "BİN" değil)', await js(`[...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === 'a.bin')?.querySelector('.tile').textContent === 'BIN'`));
-  sonuc('tamamlanan satırda boyut ve yeşil onay', await js(`(() => { const r = [...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === 'a.bin'); return r.querySelector('.size').textContent === '3,00 MB' && r.querySelector('.st.ok svg') !== null && r.querySelector('.prog').hidden; })()`));
+  sonuc('tamamlanan satırda boyut ve yeşil onaylı "Tamamlandı"', await js(`(() => { const r = [...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === 'a.bin'); const st = r.querySelector('.st'); return r.querySelector('.size').textContent === '3,00 MB' && !st.hidden && st.classList.contains('ok') && st.textContent === 'Tamamlandı' && st.querySelector('svg') !== null && r.querySelector('.pill').hidden; })()`));
+  sonuc('liste sütun başlıkları (Ad, Boyut, Durum, Hız, Tarih)', await js(`!document.querySelector('#thead').hidden && [...document.querySelectorAll('#thead span')].map((s) => s.textContent).filter(Boolean).join(',') === 'Ad,Boyut,Durum,Hız,Tarih'`));
   sonuc('tek akışlı (Range yok) dosya tamamlandı', await bekleKosul(async () => (await satir('c.bin'))?.durum === 'completed'));
   for (const [ad, boy] of [['a.bin', 3 * MB + 123], ['b.bin', 777 * K], ['c.bin', 2 * MB + 5]]) { const h = dogruMu(path.join(INDIR, ad), boy); sonuc(`${ad} bayt bayt doğru`, !h, h); }
 
   console.log('Duraklat ve sürdür');
   sonuc('yavaş dosya iniyor', await bekleKosul(async () => (await satir('d.bin'))?.durum === 'downloading'));
+  sonuc('inen satırda çubuğun içinde Türkçe yüzde ("%12") ve hız', await bekleKosul(() => js(`(() => { const r = [...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === 'd.bin'); return !r.querySelector('.pill').hidden && /^%[0-9]+/.test(r.querySelector('.ptext').textContent) && r.querySelector('.speed').textContent.endsWith('/s'); })()`), 6000));
   await bekle(1500);
   sonuc('duraklat düğmesi', await satirDugme('d.bin', 'pause'));
   sonuc('duraklatıldı', await bekleKosul(async () => (await satir('d.bin'))?.durum === 'paused', 4000));
@@ -315,6 +319,7 @@ async function testler() {
   sonuc('liste tamamen boşaldı', await bekleKosul(async () => (await satirlar()).length === 0, 3000), JSON.stringify(await satirlar()));
   say = await sayilar();
   sonuc('boş liste ekranı ve sıfır sayaç', say.bos && say.tum === 0 && say.temizleGizli, JSON.stringify(say));
+  sonuc('boş listede sütun başlıkları gizli', await js(`document.querySelector('#thead').hidden`));
   await ekle([url('hizli', 'h.bin', 512 * K)]);
   await bekleKosul(async () => (await satir('h.bin'))?.durum === 'completed');
   await satirDugme('h.bin', 'remove');
