@@ -26,7 +26,7 @@ const (
 
 // Version is a variable only so the test build can pose as a newer release
 // (-ldflags "-X hukukfixdm/internal/shared.Version=9.9.9"). Keep wails.json productVersion in step.
-var Version = "1.2.2"
+var Version = "1.3.0"
 
 // DataDir is where settings, the download list and the bridge file live.
 func DataDir() string {

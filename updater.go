@@ -397,6 +397,9 @@ func (a *App) ApplyUpdate() error {
 	return nil
 }
 
+// OpenProjectPage opens the project's GitHub page (Settings → About).
+func (a *App) OpenProjectPage() error { return shellOpen("https://github.com/" + update.Repo) }
+
 // OpenReleaseNotes opens the GitHub page of the downloaded release.
 func (a *App) OpenReleaseNotes() error {
 	if a.upd == nil {

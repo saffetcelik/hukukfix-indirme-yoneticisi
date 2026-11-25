@@ -73,8 +73,8 @@ func main() {
 
 	err = wails.Run(&options.App{
 		Title:             displayName() + " " + shared.Version, // like "Internet Download Manager 6.42"
-		Width:             980,
-		Height:            660,
+		Width:             860,
+		Height:            560,
 		MinWidth:          620,
 		MinHeight:         420,
 		StartHidden:       background,

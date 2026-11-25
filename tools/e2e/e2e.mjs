@@ -145,7 +145,7 @@ async function kapat() {
   await bekle(800);
 }
 // pencereden okumalar
-const satirlar = () => js(`[...document.querySelectorAll('#list .row')].map(r => ({ id: r.dataset.id, ad: r.querySelector('.name').textContent, durum: r.dataset.state, meta: r.querySelector('.meta').textContent }))`);
+const satirlar = () => js(`[...document.querySelectorAll('#list .row')].map(r => ({ id: r.dataset.id, ad: r.querySelector('.name').textContent, durum: r.dataset.state, meta: r.querySelector('.meta').textContent + ' | ' + r.querySelector('.size').textContent }))`);
 const satir = async (ad) => (await satirlar()).find((r) => r.ad === ad);
 const tikla = (secici) => js(`(() => { const e = document.querySelector(${JSON.stringify(secici)}); if (!e) return false; e.click(); return true; })()`);
 const satirDugme = (ad, act) => js(`(() => { const r = [...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === ${JSON.stringify(ad)}); const b = r && r.querySelector('[data-act="${act}"]'); if (!b) return false; b.click(); return true; })()`);
@@ -211,7 +211,7 @@ async function testler() {
   { const b = await baslikSurum(SURUM); sonuc(`pencere başlığında sürüm (${SURUM})`, b.startsWith('HukukFix') && b.endsWith(' ' + SURUM), b); }
   sonuc('eklenti hiç bağlanmamışken sağ altta eklenti uyarısı çıktı', await bekleKosul(ipucuAcik, 4000));
   await tikla('#ext-hint-go'); await bekle(400);
-  sonuc('"Nasıl eklenir?" Ayarlar\'ın Tarayıcı bölümünü açtı', await js(`!document.querySelector('#dlg-settings').hidden && document.querySelector('.settings').scrollTop > 0 && document.querySelector('#ext-hint').hidden`));
+  sonuc('"Nasıl eklenir?" Ayarlar\'ın Tarayıcı sayfasını açtı', await js(`!document.querySelector('#dlg-settings').hidden && !document.querySelector('.pane[data-pane="browser"]').hidden && document.querySelector('#set-tabs [data-pane="browser"]').classList.contains('on') && document.querySelector('#ext-hint').hidden`));
   await js(`document.querySelector('#dlg-settings [data-close]')?.click()`); await bekle(300);
   sonuc('uyarı kapandıktan sonra geri gelmedi', !(await ipucuAcik()));
   sonuc('ayarlarda sürüm ve "Güncellemeleri denetle"', (await surumYazisi()) === SURUM && await js(`!document.querySelector('#update-check').hidden && document.querySelector('#update-bar').hidden`));
@@ -220,6 +220,8 @@ async function testler() {
   await ekle([url('hizli', 'a.bin', 3 * MB + 123), url('hizli', 'b.bin', 777 * K), url('tek', 'c.bin', 2 * MB + 5), url('yavas', 'd.bin', 120 * MB)]);
   sonuc('4 bağlantı eklenince 4 satır', (await satirlar()).length === 4, JSON.stringify(await satirlar()));
   sonuc('hızlı dosyalar tamamlandı', await bekleKosul(async () => (await satir('a.bin'))?.durum === 'completed' && (await satir('b.bin'))?.durum === 'completed'));
+  sonuc('dosya türü rozeti Türkçe arayüzde de doğru ("BIN", "BİN" değil)', await js(`[...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === 'a.bin')?.querySelector('.tile').textContent === 'BIN'`));
+  sonuc('tamamlanan satırda boyut ve yeşil onay', await js(`(() => { const r = [...document.querySelectorAll('#list .row')].find(r => r.querySelector('.name').textContent === 'a.bin'); return r.querySelector('.size').textContent === '3,00 MB' && r.querySelector('.st.ok svg') !== null && r.querySelector('.prog').hidden; })()`));
   sonuc('tek akışlı (Range yok) dosya tamamlandı', await bekleKosul(async () => (await satir('c.bin'))?.durum === 'completed'));
   for (const [ad, boy] of [['a.bin', 3 * MB + 123], ['b.bin', 777 * K], ['c.bin', 2 * MB + 5]]) { const h = dogruMu(path.join(INDIR, ad), boy); sonuc(`${ad} bayt bayt doğru`, !h, h); }
 
@@ -369,19 +371,25 @@ async function testler() {
   sonuc('diskten silinmiş dosyayı açınca uyarı çıktı', await bekleKosul(() => toastVar('Dosya bulunamadı; taşınmış ya da silinmiş olabilir.'), 3000));
   await satirDugme('m.bin', 'remove');
 
-  console.log('Ayarlar penceresi kaydırma');
-  // Ayarlar penceresi ekrana sığmalı, içerik kendi içinde sonuna kadar kaymalı (en alttaki sürüm satırı görünür olmalı).
-  const ayarOlc = () => js(`(() => { const d = document.querySelector('#dlg-settings .dialog'), s = document.querySelector('#dlg-settings .settings'); const r = d.getBoundingClientRect();
-    s.scrollTop = s.scrollHeight; const k = s.getBoundingClientRect(), e = s.querySelector('.about').getBoundingClientRect();
-    const o = { pencere: innerWidth + 'x' + innerHeight, ust: Math.round(r.top), alt: Math.round(r.bottom), icerik: s.scrollHeight, gorunen: s.clientHeight, kaydi: s.scrollTop,
-      surumGorunur: e.top >= k.top - 1 && e.bottom <= Math.min(k.bottom, innerHeight) + 1 }; s.scrollTop = 0; return o; })()`);
+  console.log('Ayarlar sayfaları ve pencere boyutları');
+  // Ayarlar dört sayfadır. Her sayfada pencere ekrana sığmalı, içerik kendi içinde sonuna kadar kaymalı (sayfanın son öğesi görünmeli).
+  const ayarOlc = (sayfa) => js(`(() => { const sekme = document.querySelector('#set-tabs [data-pane=${JSON.stringify(sayfa)}]'); sekme.click();
+    const d = document.querySelector('#dlg-settings .dialog'), s = document.querySelector('#dlg-settings .settings'), p = s.querySelector('.pane[data-pane=${JSON.stringify(sayfa)}]');
+    const r = d.getBoundingClientRect(); s.scrollTop = s.scrollHeight; const k = s.getBoundingClientRect(), e = p.lastElementChild.getBoundingClientRect();
+    const o = { sayfa: ${JSON.stringify(sayfa)}, secili: sekme.classList.contains('on'), gorunur: !p.hidden, tekSayfa: [...s.querySelectorAll('.pane')].filter((x) => !x.hidden).length === 1,
+      pencere: innerWidth + 'x' + innerHeight, ust: Math.round(r.top), alt: Math.round(r.bottom), icerik: s.scrollHeight, gorunen: s.clientHeight, kaydi: s.scrollTop,
+      sonGorunur: e.top >= k.top - 1 && e.bottom <= Math.min(k.bottom, innerHeight) + 1 }; s.scrollTop = 0; return o; })()`);
   const pencereBoyu = (w, h) => js(`(async () => { window.runtime.WindowSetSize(${w}, ${h}); await new Promise(r => setTimeout(r, 700)); return innerWidth + 'x' + innerHeight; })()`);
   await tikla('#btn-settings'); await bekle(400);
-  for (const [w, h, ad] of [[980, 660, 'normal boyut'], [620, 420, 'en küçük pencere']]) {
+  for (const [w, h, ad] of [[860, 560, 'açılış boyutu'], [620, 420, 'en küçük pencere']]) {
     await pencereBoyu(w, h);
-    const o = await ayarOlc();
-    sonuc(`ayarlar penceresi ekrana sığıyor (${ad})`, o.ust >= 0 && o.alt <= +o.pencere.split('x')[1], JSON.stringify(o));
-    sonuc(`ayarlar sonuna kadar kayıyor (${ad})`, o.surumGorunur && (o.icerik <= o.gorunen || o.kaydi > 0), JSON.stringify(o));
+    for (const sayfa of ['general', 'speed', 'browser', 'about']) {
+      const o = await ayarOlc(sayfa);
+      sonuc(`ayarlar "${sayfa}" sayfası açılıyor, ekrana sığıyor, sonuna kadar kayıyor (${ad})`,
+        o.secili && o.gorunur && o.tekSayfa && o.ust >= 0 && o.alt <= +o.pencere.split('x')[1] && o.sonGorunur && (o.icerik <= o.gorunen || o.kaydi > 0), JSON.stringify(o));
+    }
+    const ust = await js(`(() => { const t = document.querySelector('.toolbar'), b = document.querySelector('#btn-settings').getBoundingClientRect(); return { tasma: t.scrollWidth > t.clientWidth, sag: Math.round(b.right), w: innerWidth }; })()`);
+    sonuc(`üst çubuk taşmıyor, ayarlar düğmesi görünüyor (${ad})`, !ust.tasma && ust.sag <= ust.w, JSON.stringify(ust));
   }
   await js(`document.querySelector('#dlg-settings [data-close]')?.click()`);
   // Öteki pencereler de en küçük boyutta düğmeleriyle birlikte ekranda kalmalı.
@@ -390,7 +398,7 @@ async function testler() {
   const ekleOlcu = await js(`(() => { const a = document.querySelector('#dlg-add .dialog-actions').getBoundingClientRect(); return { alt: Math.round(a.bottom), pencere: innerHeight }; })()`);
   sonuc('ekleme penceresinin düğmeleri en küçük pencerede görünüyor', ekleOlcu.alt <= ekleOlcu.pencere, JSON.stringify(ekleOlcu));
   await js(`document.querySelector('#dlg-add [data-close]')?.click()`);
-  await pencereBoyu(980, 660);
+  await pencereBoyu(860, 560);
 
   console.log('Tema ve dil');
   const ayarSec = (k, v) => js(`(() => { const e = document.querySelector('[data-set="${k}"]'); e.value = ${JSON.stringify(v)}; e.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -418,7 +426,7 @@ async function testler() {
   sonuc('eklenti bağlanmış kurulumda uyarı çıkmadı', !(await ipucuAcik()));
 
   console.log('Otomatik güncelleme (imza denetimi)');
-  await tikla('#btn-settings'); await bekle(300);
+  await tikla('#btn-settings'); await bekle(300); await tikla('#set-tabs [data-pane="about"]');
   yayinla('ayni');
   await tikla('#update-check');
   sonuc('yayındaki sürüm aynıyken "Güncel"', await bekleKosul(async () => (await guncDurum()).s === 'latest', 15000), JSON.stringify(await guncDurum()));
@@ -485,7 +493,7 @@ async function testler() {
   sonuc('açılıştan hemen sonra kendiliğinden denetledi (GitHub\'a ulaşılamadı)', await bekleKosul(async () => { const d = await guncDurum(); return d.s === 'error' && d.e === 'network'; }, 8000), JSON.stringify(await guncDurum()));
   yayinla('iyi');
   sonuc('başarısız denetim kısa süre sonra kendiliğinden yinelendi ve yeni sürüm indi', await bekleKosul(async () => (await guncDurum()).s === 'ready', 40000), JSON.stringify(await guncDurum()));
-  await tikla('#btn-settings'); await bekle(300);
+  await tikla('#btn-settings'); await bekle(300); await tikla('#set-tabs [data-pane="about"]');
   sonuc('ayarlarda "9.9.9 hazır" ve "Yeniden başlat"', (await guncDurum()).yazi === '9.9.9 hazır' && await js(`!document.querySelector('#update-apply2').hidden && document.querySelector('#update-check').hidden`));
   await js(`document.querySelector('#dlg-settings [data-close]')?.click()`);
   await kapat();

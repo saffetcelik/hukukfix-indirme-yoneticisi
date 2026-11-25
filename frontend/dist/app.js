@@ -14,6 +14,7 @@ const ICON = {
   link: '<path d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2-2a2.5 2.5 0 0 0-3.5-3.5l-.7.7M9.5 6.5a2.5 2.5 0 0 0-3.5 0l-2 2A2.5 2.5 0 0 0 7.500 12l.7-.7"/>',
   trash: '<path d="M3 4.5h10M6.500 4.500V3h3v1.500M4.500 4.500l.5 8h6l.5-8"/>',
   remove: '<path d="M4 8h8"/>',
+  check: '<path d="M3 8.5l3.2 3.2L13 4.8"/>',
 };
 const svg = (name) => `<svg viewBox="0 0 16 16">${ICON[name]}</svg>`;
 
@@ -147,7 +148,8 @@ function createRow(id) {
   const el = document.createElement('div');
   el.className = 'row';
   el.dataset.id = id;
-  el.innerHTML = '<div class="tile"></div><div class="body"><div class="top"><span class="name"></span><span class="pct"></span></div><div class="prog" hidden></div><div class="meta"></div></div><div class="acts"></div>';
+  el.innerHTML = '<div class="tile"></div><div class="body"><span class="name"></span><div class="meta"></div></div>' +
+    '<div class="pcol"><div class="prog" hidden></div><span class="pct"></span><span class="st" hidden></span></div><div class="size"></div><div class="acts"></div>';
   return el;
 }
 
@@ -172,28 +174,38 @@ function actionsFor(s) {
   }
 }
 
+// The line under the name says what is going on; sizes have their own column.
 function metaHTML(s) {
   const sep = '<i>·</i>';
-  const size = s.total > 0 ? t('of', { a: fmtBytes(s.received), b: fmtBytes(s.total) }) : fmtBytes(s.received);
   switch (s.state) {
     case 'completed':
-      return [fmtBytes(s.total > 0 ? s.total : s.received), esc(s.host), fmtDate(s.finishedAt)].filter(Boolean).join(sep);
+      return esc(s.host);
     case 'failed':
       return `<span class="s-err">${esc(errorText(s))}</span>`;
     case 'paused':
-      return [t('stPaused'), s.received > 0 ? size : ''].filter(Boolean).join(sep);
+      return t('stPaused');
     case 'queued':
-      return [t('stQueued'), s.received > 0 ? size : ''].filter(Boolean).join(sep);
+      return t('stQueued');
     case 'connecting':
       return [t('stConnecting'), esc(s.host)].join(sep);
     default: {
-      const parts = [size, `<span class="s-speed">${fmtSpeed(s.speed)}</span>`];
+      const parts = [`<span class="s-speed">${fmtSpeed(s.speed)}</span>`];
       if (s.eta >= 0) parts.push(t('left', { t: fmtEta(s.eta) }));
       if (s.conns > 1) parts.push(t('conns', { n: s.conns }));
       if (!s.resumable) parts.push(t('noResume'));
       return parts.join(sep);
     }
   }
+}
+
+// "2,10 / 5,80 GB" while downloading, "4,20 MB" when done, "—" before the size is known.
+function sizeText(s) {
+  if (s.state === 'completed') return fmtBytes(s.total > 0 ? s.total : s.received);
+  if (!(s.total > 0)) return s.received > 0 ? fmtBytes(s.received) : '—';
+  if (!(s.received > 0)) return fmtBytes(s.total);
+  const a = fmtBytes(s.received), b = fmtBytes(s.total);
+  const ua = a.split(' ').pop(), ub = b.split(' ').pop();
+  return ua === ub ? `${a.slice(0, -ua.length - 1)} / ${b}` : t('of', { a, b });
 }
 
 function updateRow(el, s) {
@@ -207,12 +219,13 @@ function updateRow(el, s) {
   const tile = el.children[0];
   const m = /\.([a-z0-9]{1,8})$/i.exec(s.fileName);
   tile.dataset.c = s.category;
-  tile.textContent = m ? m[1].slice(0, 4) : '···';
+  // Upper-cased here with an English locale: CSS uppercase in Turkish turns "zip" into "ZİP".
+  tile.textContent = m ? m[1].slice(0, 4).toLocaleUpperCase('en-US') : '···';
 
   const name = $('.name', el);
   if (name.textContent !== s.fileName) { name.textContent = s.fileName; name.title = s.fileName; }
 
-  const prog = $('.prog', el);
+  const prog = $('.prog', el), st = $('.st', el);
   const showBar = s.state !== 'completed' && s.state !== 'failed' || (s.state === 'failed' && s.received > 0 && s.total > 0);
   prog.hidden = !showBar;
   if (showBar) {
@@ -220,10 +233,16 @@ function updateRow(el, s) {
     prog.classList.toggle('indet', indet);
     prog.style.backgroundImage = indet ? '' : progressImage(s);
   }
-  $('.pct', el).textContent = s.state !== 'completed' && s.total > 0 && s.received > 0 ? Math.floor(s.received / s.total * 100) + '%' : '';
+  $('.pct', el).textContent = showBar && s.total > 0 && s.received > 0 ? Math.floor(s.received / s.total * 100) + '%' : '';
+  st.hidden = showBar;
+  if (!showBar) {
+    st.className = 'st ' + (s.state === 'completed' ? 'ok' : 'err');
+    st.innerHTML = s.state === 'completed' ? svg('check') + esc(fmtDate(s.finishedAt) || t('stDone')) : esc(t('stFailed'));
+  }
+  $('.size', el).textContent = sizeText(s);
   $('.meta', el).innerHTML = metaHTML(s);
 
-  const acts = el.children[2];
+  const acts = $('.acts', el);
   if (acts.dataset.for !== s.state + lang) {
     acts.dataset.for = s.state + lang;
     acts.innerHTML = actionsFor(s).map(([act, label, icon]) =>
@@ -485,7 +504,7 @@ $('#btn-resume-all').onclick = () => api.ResumeAll();
 $('#btn-folder').onclick = () => api.OpenDownloadFolder();
 $('#btn-clear').onclick = () => api.ClearFinished();
 $('#btn-settings').onclick = () => openSettings();
-$('#st-limit').onclick = () => openSettings();
+$('#st-limit').onclick = () => openSettings('speed');
 $('#st-ext').onclick = () => openSettings(true);
 
 addEventListener('keydown', (e) => {
@@ -574,12 +593,18 @@ async function refreshExt() {
   renderExt();
   renderStatus();
 }
-function openSettings(toBrowser) {
+// Settings has four pages: general, speed, browser, about. openSettings(true) opens the browser page.
+function settingsPane(name) {
+  for (const b of $$('#set-tabs [data-pane]')) b.classList.toggle('on', b.dataset.pane === name);
+  for (const p of $$('.settings .pane')) p.hidden = p.dataset.pane !== name;
+  $('.settings').scrollTop = 0;
+}
+for (const b of $$('#set-tabs [data-pane]')) b.onclick = () => settingsPane(b.dataset.pane);
+function openSettings(page) {
   fillSettings();
   refreshExt();
   openDialog('dlg-settings');
-  const pane = $('.settings');
-  pane.scrollTop = toBrowser ? $('#ext-card').offsetTop : 0;
+  settingsPane(page === true ? 'browser' : page || 'general');
 }
 setInterval(refreshExtQuiet, 5000);
 function refreshExtQuiet() { if (api && !document.hidden) refreshExt().catch(() => {}); }
@@ -623,6 +648,7 @@ async function applyUpdate() {
 $('#update-apply').onclick = applyUpdate;
 $('#update-apply2').onclick = applyUpdate;
 $('#update-notes').onclick = () => api.OpenReleaseNotes().catch(() => {});
+$('#about-source').onclick = () => api.OpenProjectPage().catch(() => {});
 $('#update-close').onclick = () => { updDismissed = upd.version; renderUpdate(); };
 $('#update-check').onclick = () => {
   manualCheckAt = Date.now();
@@ -660,7 +686,7 @@ function mockBackend() {
     Extension: async () => extInfo, SaveSettings: async (x) => x, ClipboardURL: async () => '', ChooseFolder: async () => '',
     Add: async () => 0, Pause: noop, Resume: noop, Remove: noop, PauseAll: noop, ResumeAll: noop, ClearFinished: noop, OpenFile: noop,
     ShowInFolder: noop, CopyText: noop, OpenExtensionFolder: noop, OpenExtensionsPage: noop, OpenDownloadFolder: noop,
-    CheckForUpdates: noop, ApplyUpdate: noop, OpenReleaseNotes: noop,
+    CheckForUpdates: noop, ApplyUpdate: noop, OpenReleaseNotes: noop, OpenProjectPage: noop,
   };
 }
 

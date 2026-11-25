@@ -4,7 +4,7 @@ Windows için hızlı, sade, **ücretsiz ve açık kaynak** bir indirme yönetic
 
 > **Claude Fable 5.2 ile geliştirildi.** Bu programın kodu Anthropic'in Claude Fable 5.2 modeliyle yazıldı.
 
-<p align="center"><img src="docs/ekran-goruntusu.png" width="760" alt="HukukFix İndirme Yöneticisi ana penceresi: iki indirme sekiz bağlantıyla sürüyor"></p>
+<p align="center"><img src="docs/ekran-goruntusu.png" width="760" alt="HukukFix İndirme Yöneticisi 1.3.0 ana penceresi: iki indirme sekiz bağlantıyla sürüyor, biri duraklatılmış, dördü tamamlanmış"></p>
 
 ## İndir
 
@@ -94,6 +94,7 @@ Uçtan uca test, programın test sürümünü (`-tags e2e`, yalnız testte derle
 
 ## Sürüm notları
 
+- **1.3.0** — Arayüz sadeleşti ve küçüldü. Pencere 860×560 açılıyor; sekmeler araç çubuğuna taşındı. Her indirme aynı boyda tek satır: solda ad ve durum, sağda kısa ilerleme çubuğu, yüzde ve boyut sütunları; biten indirmede yeşil onay ve tarih. Ayarlar dört sayfaya ayrıldı (Genel, Hız, Tarayıcı, Hakkında). Türkçe arayüzde dosya türü rozetleri "ZİP" yerine "ZIP" yazıyor. Uçtan uca test 146 adım.
 - **1.2.2** — Güncelleme denetimi açılıştan 45 saniye yerine 10 saniye sonra yapılıyor. İnternete ulaşılamadığı ya da indirme yarıda kaldığı için başarısız olan denetim 6 saat yerine 10 dakika sonra yineleniyor. Uçtan uca test 138 adım.
 - **1.2.1** — Pencere başlığında sürüm numarası ("HukukFix İndirme Yöneticisi 1.2.1"). Tarayıcı eklentisi henüz hiç bağlanmamışsa sağ altta eklentinin nasıl ekleneceğini gösteren küçük bir uyarı çıkar; eklenti bir kez bağlanınca bir daha gösterilmez. "Güncellemeleri denetle" sonucunu açıkça gösteriyor: denetlerken dönen bir gösterge, güncelse yeşil onay işareti ve "En güncel sürümü kullanıyorsunuz" bildirimi, denetlenemezse nedeni. Ayarlar'ın altındaki sürüm satırı ayraçlarla düzenlendi. Uçtan uca test açık bir HukukFix varken de çalışıyor; 137 adım.
 - **1.2.0** — Tek dosya, kendini kuran program ve otomatik güncelleme. `HukukFixDM.exe` çalıştırılınca `%LOCALAPPDATA%\HukukFixDM` içine kurulur, masaüstüne ve Başlat menüsüne kısayol koyar, "Yüklü uygulamalar"dan kaldırılabilir. Tarayıcı köprüsü programın içine gömüldü; ayrı `HukukFixDM-host.exe` dosyası yok. Yeni sürümler GitHub'dan kendiliğinden iner; Ed25519 imzası, sürüm numarası ve SHA-256 özeti doğrulanınca kurulur. Uçtan uca test 124 adım.

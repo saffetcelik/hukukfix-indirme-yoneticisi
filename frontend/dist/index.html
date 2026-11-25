@@ -8,18 +8,24 @@
 </head>
 <body>
 
+<!-- One bar: add, filter, search, bulk actions. -->
 <header class="toolbar">
-  <button id="btn-add" class="btn primary">
+  <button id="btn-add" class="btn primary" data-tt="newDownload">
     <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg><span data-t="newDownload"></span>
   </button>
+  <nav class="seg" id="tabs">
+    <button data-filter="all" class="on"><span data-t="tabAll"></span><b id="n-all">0</b></button>
+    <button data-filter="active"><span data-t="tabActive"></span><b id="n-active">0</b></button>
+    <button data-filter="done"><span data-t="tabDone"></span><b id="n-done">0</b></button>
+  </nav>
+  <div class="spacer"></div>
   <label class="search">
     <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
     <input id="search" type="search" spellcheck="false" autocomplete="off" data-tp="search">
   </label>
-  <div class="spacer"></div>
+  <span class="sep"></span>
   <button id="btn-resume-all" class="btn icon" data-tt="resumeAll"><svg viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z"/></svg></button>
   <button id="btn-pause-all" class="btn icon" data-tt="pauseAll"><svg viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg></button>
-  <span class="sep"></span>
   <button id="btn-folder" class="btn icon" data-tt="openFolder"><svg viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg></button>
   <button id="btn-settings" class="btn icon" data-tt="settings"><svg viewBox="0 0 16 16"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg></button>
 </header>
@@ -33,14 +39,6 @@
   <button id="update-close" class="btn icon" data-tt="upLater"><svg viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
 </div>
 
-<nav class="tabs" id="tabs">
-  <button data-filter="all" class="on"><span data-t="tabAll"></span><b id="n-all">0</b></button>
-  <button data-filter="active"><span data-t="tabActive"></span><b id="n-active">0</b></button>
-  <button data-filter="done"><span data-t="tabDone"></span><b id="n-done">0</b></button>
-  <div class="spacer"></div>
-  <button id="btn-clear" class="link" data-t="clearDone"></button>
-</nav>
-
 <main id="list" tabindex="-1"></main>
 
 <section id="empty" class="empty" hidden>
@@ -52,8 +50,9 @@
 <footer class="status">
   <span id="st-speed" class="st-speed"></span>
   <span id="st-active"></span>
-  <div class="spacer"></div>
   <button id="st-limit" class="chip" hidden></button>
+  <div class="spacer"></div>
+  <button id="btn-clear" class="chip" data-t="clearDone"></button>
   <button id="st-ext" class="chip"><i class="dot"></i><span></span></button>
 </footer>
 
@@ -87,89 +86,109 @@
   </div>
 </div>
 
-<!-- Settings -->
+<!-- Settings: four short pages instead of one long scroll -->
 <div class="overlay" id="dlg-settings" hidden>
   <div class="dialog wide" role="dialog" aria-modal="true">
     <div class="dialog-head">
       <h3 data-t="settings"></h3>
       <button class="btn icon" data-close><svg viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
     </div>
+    <nav class="seg set-tabs" id="set-tabs">
+      <button data-pane="general" class="on" data-t="secGeneral"></button>
+      <button data-pane="speed" data-t="secSpeed"></button>
+      <button data-pane="browser" data-t="secBrowser"></button>
+      <button data-pane="about" data-t="secAbout"></button>
+    </nav>
     <div class="settings">
-      <h4 data-t="secGeneral"></h4>
-      <div class="set">
-        <div><label data-t="setFolder"></label><small id="set-dir" class="path"></small></div>
-        <button id="set-dir-btn" class="btn" data-t="change"></button>
-      </div>
-      <div class="set">
-        <div><label data-t="setCategories"></label><small data-t="setCategoriesHint"></small></div>
-        <input type="checkbox" class="switch" data-set="categoryFolders">
-      </div>
-      <div class="set">
-        <div><label data-t="setAutostart"></label><small data-t="setAutostartHint"></small></div>
-        <input type="checkbox" class="switch" data-set="autostart">
-      </div>
-      <div class="set">
-        <div><label data-t="setNotify"></label></div>
-        <input type="checkbox" class="switch" data-set="notify">
-      </div>
-      <div class="set">
-        <div><label data-t="setAutoUpdate"></label><small data-t="setAutoUpdateHint"></small></div>
-        <input type="checkbox" class="switch" data-set="autoUpdate">
-      </div>
-      <div class="set">
-        <div><label data-t="setLanguage"></label></div>
-        <select data-set="language"><option value="auto" data-t="optAuto"></option><option value="tr">Türkçe</option><option value="en">English</option></select>
-      </div>
-      <div class="set">
-        <div><label data-t="setTheme"></label></div>
-        <select data-set="theme"><option value="system" data-t="optSystem"></option><option value="light" data-t="optLight"></option><option value="dark" data-t="optDark"></option></select>
-      </div>
+      <section class="pane" data-pane="general">
+        <div class="set">
+          <div><label data-t="setFolder"></label><small id="set-dir" class="path"></small></div>
+          <button id="set-dir-btn" class="btn" data-t="change"></button>
+        </div>
+        <div class="set">
+          <div><label data-t="setCategories"></label><small data-t="setCategoriesHint"></small></div>
+          <input type="checkbox" class="switch" data-set="categoryFolders">
+        </div>
+        <div class="set">
+          <div><label data-t="setAutostart"></label><small data-t="setAutostartHint"></small></div>
+          <input type="checkbox" class="switch" data-set="autostart">
+        </div>
+        <div class="set">
+          <div><label data-t="setNotify"></label></div>
+          <input type="checkbox" class="switch" data-set="notify">
+        </div>
+        <div class="set">
+          <div><label data-t="setLanguage"></label></div>
+          <select data-set="language"><option value="auto" data-t="optAuto"></option><option value="tr">Türkçe</option><option value="en">English</option></select>
+        </div>
+        <div class="set">
+          <div><label data-t="setTheme"></label></div>
+          <select data-set="theme"><option value="system" data-t="optSystem"></option><option value="light" data-t="optLight"></option><option value="dark" data-t="optDark"></option></select>
+        </div>
+      </section>
 
-      <h4 data-t="secSpeed"></h4>
-      <div class="set">
-        <div><label data-t="setConns"></label><small data-t="setConnsHint"></small></div>
-        <div class="range"><input type="range" min="1" max="32" data-set="maxConnections"><output></output></div>
-      </div>
-      <div class="set">
-        <div><label data-t="setActive"></label></div>
-        <div class="range"><input type="range" min="1" max="10" data-set="maxActive"><output></output></div>
-      </div>
-      <div class="set">
-        <div><label data-t="setLimit"></label><small data-t="setLimitHint"></small></div>
-        <div class="unit"><input type="number" min="0" step="100" data-set="speedLimitKB"><span>KB/s</span></div>
-      </div>
+      <section class="pane" data-pane="speed" hidden>
+        <div class="set">
+          <div><label data-t="setConns"></label><small data-t="setConnsHint"></small></div>
+          <div class="range"><input type="range" min="1" max="32" data-set="maxConnections"><output></output></div>
+        </div>
+        <div class="set">
+          <div><label data-t="setActive"></label></div>
+          <div class="range"><input type="range" min="1" max="10" data-set="maxActive"><output></output></div>
+        </div>
+        <div class="set">
+          <div><label data-t="setLimit"></label><small data-t="setLimitHint"></small></div>
+          <div class="unit"><input type="number" min="0" step="100" data-set="speedLimitKB"><span>KB/s</span></div>
+        </div>
+      </section>
 
-      <h4 data-t="secBrowser"></h4>
-      <div class="set">
-        <div><label data-t="setCapture"></label><small data-t="setCaptureHint"></small></div>
-        <input type="checkbox" class="switch" data-set="capture">
-      </div>
-      <div class="set">
-        <div><label data-t="setShowOnCapture"></label></div>
-        <input type="checkbox" class="switch" data-set="showOnCapture">
-      </div>
-      <div class="set">
-        <div><label data-t="setMinSize"></label><small data-t="setMinSizeHint"></small></div>
-        <div class="unit"><input type="number" min="0" step="100" data-set="captureMinKB"><span>KB</span></div>
-      </div>
-      <div class="set col">
-        <div class="set-head"><label data-t="setExts"></label><button id="exts-reset" class="link" data-t="reset"></button></div>
-        <textarea id="set-exts" rows="3" spellcheck="false"></textarea>
-      </div>
+      <section class="pane" data-pane="browser" hidden>
+        <div class="card" id="ext-card">
+          <div class="card-head"><i class="dot"></i><b id="ext-state"></b></div>
+          <ol class="steps">
+            <li><span data-t="step1"></span><span id="ext-browsers" class="inline-btns"></span></li>
+            <li data-t="step2"></li>
+            <li><span data-t="step3"></span>
+              <div class="pathbox"><code id="ext-dir"></code><button id="ext-copy" class="link" data-t="copy"></button><button id="ext-open" class="link" data-t="openFolderShort"></button></div>
+            </li>
+          </ol>
+          <p id="ext-warn" class="error" hidden data-t="hostMissing"></p>
+        </div>
+        <div class="set">
+          <div><label data-t="setCapture"></label><small data-t="setCaptureHint"></small></div>
+          <input type="checkbox" class="switch" data-set="capture">
+        </div>
+        <div class="set">
+          <div><label data-t="setShowOnCapture"></label></div>
+          <input type="checkbox" class="switch" data-set="showOnCapture">
+        </div>
+        <div class="set">
+          <div><label data-t="setMinSize"></label><small data-t="setMinSizeHint"></small></div>
+          <div class="unit"><input type="number" min="0" step="100" data-set="captureMinKB"><span>KB</span></div>
+        </div>
+        <div class="set col">
+          <div class="set-head"><label data-t="setExts"></label><button id="exts-reset" class="link" data-t="reset"></button></div>
+          <textarea id="set-exts" rows="3" spellcheck="false"></textarea>
+        </div>
+      </section>
 
-      <div class="card" id="ext-card">
-        <div class="card-head"><i class="dot"></i><b id="ext-state"></b></div>
-        <ol class="steps">
-          <li><span data-t="step1"></span><span id="ext-browsers" class="inline-btns"></span></li>
-          <li data-t="step2"></li>
-          <li><span data-t="step3"></span>
-            <div class="pathbox"><code id="ext-dir"></code><button id="ext-copy" class="link" data-t="copy"></button><button id="ext-open" class="link" data-t="openFolderShort"></button></div>
-          </li>
-        </ol>
-        <p id="ext-warn" class="error" hidden data-t="hostMissing"></p>
-      </div>
-
-      <p class="about"><span>HukukFix İndirme Yöneticisi <span id="about-version"></span></span><span id="update-line" class="upd" hidden><i></i><span id="update-status"></span></span><button id="update-check" class="link" data-t="checkUpdates"></button><button id="update-apply2" class="link" data-t="upRestart" hidden></button></p>
+      <section class="pane" data-pane="about" hidden>
+        <div class="about-card">
+          <img src="icon.png" alt="">
+          <div><b>HukukFix İndirme Yöneticisi</b><small><span data-t="versionLabel"></span> <span id="about-version"></span></small></div>
+        </div>
+        <div class="set">
+          <div><label data-t="setAutoUpdate"></label><small data-t="setAutoUpdateHint"></small></div>
+          <input type="checkbox" class="switch" data-set="autoUpdate">
+        </div>
+        <div class="upd-row">
+          <span id="update-line" class="upd" hidden><i></i><span id="update-status"></span></span>
+          <div class="spacer"></div>
+          <button id="update-check" class="btn" data-t="checkUpdates"></button>
+          <button id="update-apply2" class="btn primary" data-t="upRestart" hidden></button>
+        </div>
+        <p class="about-foot"><span data-t="aboutFoot"></span> <button id="about-source" class="link" data-t="aboutSource"></button></p>
+      </section>
     </div>
   </div>
 </div>
